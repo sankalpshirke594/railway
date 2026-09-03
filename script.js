@@ -6,6 +6,8 @@
  * NOTE: All data is synthetic prototype data for demonstration only.
  */
 
+import { initCorridorTracking } from "./corridor-tracking.js";
+
 // ==========================================
 // 1. SYNTHETIC MOCK DATA STORAGE
 // ==========================================
@@ -325,6 +327,17 @@ function switchPage(pageId) {
     }
   });
 
+  // If switching to corridor tracking, trigger map resize / activation
+  if (pageId === "corridor-tracking") {
+    setTimeout(() => {
+      try {
+        initCorridorTracking();
+      } catch (err) {
+        console.error("Corridor tracking activation error:", err);
+      }
+    }, 40);
+  }
+
   // Scroll to top of content safely
   try {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -339,6 +352,14 @@ window._switchPageImpl = switchPage;
 
 // Setup Dashboard Quick Nav Actions
 function setupDashboardInteractions() {
+  const btnViewCorridor = document.getElementById("btn-dashboard-view-corridor");
+  if (btnViewCorridor) {
+    btnViewCorridor.addEventListener("click", (e) => {
+      e.preventDefault();
+      switchPage("corridor-tracking");
+    });
+  }
+
   const btnViewRecs = document.getElementById("btn-dashboard-view-recommendations");
   if (btnViewRecs) {
     btnViewRecs.addEventListener("click", (e) => {
@@ -420,6 +441,7 @@ function initApp() {
   try { setupSimulationModal(); } catch (err) { console.error("Simulation modal setup error:", err); }
   try { setupMobileDrawer(); } catch (err) { console.error("Mobile drawer setup error:", err); }
   try { renderAllViews(); } catch (err) { console.error("Render views error:", err); }
+  try { initCorridorTracking(); } catch (err) { console.error("Corridor tracking init error:", err); }
 }
 
 if (document.readyState === "loading") {
