@@ -103,6 +103,14 @@
             </span>
           </a>
 
+          <a href="#analytics" class="nav-item" id="nav-analytics" data-page="analytics" role="button">
+            <span class="nav-item-content">
+              <i class="fa-solid fa-chart-column"></i>
+              <span>Analytics &amp; Graphs</span>
+            </span>
+            <span class="nav-badge" id="nav-badge-analytics" style="background-color: var(--color-cyan); color: var(--color-navy); font-weight: 700;">NEW</span>
+          </a>
+
           <a href="#corridor-tracking" class="nav-item" id="nav-corridor-tracking" data-page="corridor-tracking" role="button">
             <span class="nav-item-content">
               <i class="fa-solid fa-map-location-dot"></i>
@@ -250,6 +258,9 @@
                 <span class="badge badge-demo" id="badge-dashboard-synthetic">Synthetic Demo Data</span>
               </div>
               <div class="header-actions">
+                <button class="btn-secondary" id="btn-dashboard-view-analytics" style="background: var(--surface); border: 1px solid var(--border); color: var(--color-navy); font-weight: 600;">
+                  <i class="fa-solid fa-chart-column" style="color: var(--color-railway-blue);"></i> Operations Analytics
+                </button>
                 <button class="btn-secondary" id="btn-dashboard-view-corridor" style="background: var(--surface); border: 1px solid var(--border); color: var(--color-navy); font-weight: 600;">
                   <i class="fa-solid fa-map-location-dot" style="color: var(--color-railway-blue);"></i> Live Corridor Map
                 </button>
@@ -493,6 +504,251 @@
           </section>
 
           <!-- ========================================== -->
+          <!-- PAGE: OPERATIONS & CORRIDOR ANALYTICS      -->
+          <!-- ========================================== -->
+          <section class="page-view" id="view-analytics">
+            <div class="page-header" id="analytics-header">
+              <div class="page-title-wrap">
+                <h2 class="page-title" id="heading-analytics">Corridor &amp; Block Planning Analytics</h2>
+                <span class="badge badge-success" id="badge-analytics-engine">
+                  <i class="fa-solid fa-chart-pie"></i> Multi-Department Telemetry
+                </span>
+                <span class="badge badge-demo" id="badge-analytics-synthetic">Synthetic Demo Data</span>
+              </div>
+              <div class="header-actions" id="analytics-header-actions">
+                <button class="btn-secondary" id="btn-reset-analytics-filters" title="Reset all chart filters">
+                  <i class="fa-solid fa-rotate-left"></i> Reset Filters
+                </button>
+                <button class="btn-primary" id="btn-export-analytics-csv">
+                  <i class="fa-solid fa-download"></i> Export Analytics (CSV)
+                </button>
+              </div>
+            </div>
+
+            <!-- Analytics Interactive Filter Toolbar -->
+            <div class="analytics-filter-bar" id="analytics-filters-bar">
+              <div class="analytics-filter-group">
+                <label class="analytics-filter-label" for="analytics-corridor-filter">
+                  <i class="fa-solid fa-route" style="color: var(--color-railway-blue);"></i> Corridor Section:
+                </label>
+                <select class="analytics-select" id="analytics-corridor-filter">
+                  <option value="All">All Sections (Total Network)</option>
+                  <option value="Kalyan–Igatpuri DN">Kalyan–Igatpuri DN</option>
+                  <option value="Pune–Lonavala DN">Pune–Lonavala DN</option>
+                  <option value="Thane–Kalyan DN">Thane–Kalyan DN</option>
+                  <option value="Dadar–Kurla UP">Dadar–Kurla UP</option>
+                  <option value="Igatpuri–Bhusawal DN">Igatpuri–Bhusawal DN</option>
+                  <option value="Diva–Panvel DN">Diva–Panvel DN</option>
+                  <option value="Karjat–Lonavala UP">Karjat–Lonavala UP</option>
+                  <option value="CSMT–Byculla UP">CSMT–Byculla UP</option>
+                </select>
+              </div>
+
+              <div class="analytics-filter-group">
+                <label class="analytics-filter-label" for="analytics-dept-filter">
+                  <i class="fa-solid fa-building-user" style="color: var(--color-amber);"></i> Department:
+                </label>
+                <select class="analytics-select" id="analytics-dept-filter">
+                  <option value="All">All Departments (Eng + TRD + S&amp;T)</option>
+                  <option value="Engineering">Engineering (Civil Track)</option>
+                  <option value="TRD">TRD (Traction &amp; OHE)</option>
+                  <option value="S&T">S&amp;T (Signalling &amp; Telecom)</option>
+                </select>
+              </div>
+
+              <div class="analytics-filter-group">
+                <label class="analytics-filter-label" for="analytics-severity-filter">
+                  <i class="fa-solid fa-triangle-exclamation" style="color: var(--color-red);"></i> Severity:
+                </label>
+                <select class="analytics-select" id="analytics-severity-filter">
+                  <option value="All">All Severities</option>
+                  <option value="Critical">Critical Only</option>
+                  <option value="High">High Only</option>
+                  <option value="Medium">Medium Only</option>
+                  <option value="Low">Low Only</option>
+                </select>
+              </div>
+
+              <div class="analytics-filter-group" style="margin-left: auto;">
+                <span class="metric-subtext" id="analytics-filtered-summary">Showing 12 matching maintenance requests</span>
+              </div>
+            </div>
+
+            <!-- 4 Top Analytics KPI Cards -->
+            <div class="analytics-kpi-grid" id="analytics-kpi-container">
+              <div class="analytics-kpi-card blue" id="kpi-total-hours">
+                <div>
+                  <div class="analytics-kpi-title">Total Maintenance Backlog</div>
+                  <div class="analytics-kpi-val" id="kpi-val-hours">36.0 hrs</div>
+                  <div class="analytics-kpi-sub"><i class="fa-solid fa-list-check"></i> <span id="kpi-val-req-count">12</span> requests across 3 depts</div>
+                </div>
+                <div class="analytics-kpi-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+              </div>
+
+              <div class="analytics-kpi-card green" id="kpi-hours-saved">
+                <div>
+                  <div class="analytics-kpi-title">Integrated Line Savings</div>
+                  <div class="analytics-kpi-val" id="kpi-val-saved">11.5 hrs</div>
+                  <div class="analytics-kpi-sub" style="color: var(--color-green);"><i class="fa-solid fa-arrow-trend-up"></i> +38.9% Track Availability</div>
+                </div>
+                <div class="analytics-kpi-icon"><i class="fa-solid fa-bolt"></i></div>
+              </div>
+
+              <div class="analytics-kpi-card amber" id="kpi-avg-priority">
+                <div>
+                  <div class="analytics-kpi-title">Average Priority Score</div>
+                  <div class="analytics-kpi-val" id="kpi-val-priority">70.6 / 100</div>
+                  <div class="analytics-kpi-sub"><i class="fa-solid fa-calculator"></i> Multi-factor weighted index</div>
+                </div>
+                <div class="analytics-kpi-icon"><i class="fa-solid fa-gauge"></i></div>
+              </div>
+
+              <div class="analytics-kpi-card purple" id="kpi-critical-ratio">
+                <div>
+                  <div class="analytics-kpi-title">Safety-Critical Ratio</div>
+                  <div class="analytics-kpi-val" id="kpi-val-critical">25.0%</div>
+                  <div class="analytics-kpi-sub" style="color: var(--color-red);"><i class="fa-solid fa-triangle-exclamation"></i> <span id="kpi-val-critical-count">3</span> Urgent rail/point items</div>
+                </div>
+                <div class="analytics-kpi-icon"><i class="fa-solid fa-shield-halved"></i></div>
+              </div>
+            </div>
+
+            <!-- Charts Row 1: Donut & Grouped Bar Chart -->
+            <div class="analytics-charts-grid" id="analytics-grid-row-1">
+              <!-- Chart 1: Department Workload & Block Hours Breakdown -->
+              <div class="analytics-chart-card" id="chart-card-dept-donut">
+                <div class="analytics-chart-header">
+                  <div>
+                    <h3 class="analytics-chart-title">
+                      <i class="fa-solid fa-chart-pie" style="color: var(--color-railway-blue);"></i>
+                      Department Workload &amp; Hours Share
+                    </h3>
+                    <p class="analytics-chart-subtitle">Distribution of required maintenance block duration by department</p>
+                  </div>
+                  <span class="badge badge-low" id="badge-dept-total-share">100% Track Time</span>
+                </div>
+                <div class="analytics-chart-container" id="container-dept-donut">
+                  <div class="donut-layout-wrap">
+                    <div style="position: relative; width: 220px; height: 220px; display: flex; align-items: center; justify-content: center;">
+                      <svg id="svg-dept-donut" width="220" height="220" viewBox="0 0 220 220" style="transform: rotate(-90deg);"></svg>
+                      <div style="position: absolute; text-align: center; pointer-events: none;" id="donut-center-text">
+                        <div style="font-size: 20px; font-weight: 800; color: var(--color-text-main);" id="donut-center-val">36.0h</div>
+                        <div style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">Total Duration</div>
+                      </div>
+                    </div>
+                    <div class="donut-legend-list" id="donut-legend-container">
+                      <!-- Rendered by JS -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Chart 2: Corridor Capacity Gain (Separate vs. Integrated Blocks) -->
+              <div class="analytics-chart-card" id="chart-card-capacity-gain">
+                <div class="analytics-chart-header">
+                  <div>
+                    <h3 class="analytics-chart-title">
+                      <i class="fa-solid fa-chart-column" style="color: var(--color-green);"></i>
+                      Track Block Duration: Isolated vs. Integrated
+                    </h3>
+                    <p class="analytics-chart-subtitle">Hours saved per section when coordinating Engineering, TRD &amp; S&amp;T</p>
+                  </div>
+                  <span class="badge badge-success"><i class="fa-solid fa-clock"></i> 11.5h Saved</span>
+                </div>
+                <div class="analytics-chart-container" id="container-capacity-gain">
+                  <div class="bar-chart-wrap" id="capacity-gain-bars-list">
+                    <!-- Rendered by JS -->
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Charts Row 2: Scatter / Risk Matrix (Full Width) -->
+            <div class="analytics-chart-card full-width" id="chart-card-risk-matrix" style="margin-bottom: 24px;">
+              <div class="analytics-chart-header">
+                <div>
+                  <h3 class="analytics-chart-title">
+                    <i class="fa-solid fa-bullseye" style="color: var(--color-red);"></i>
+                    Priority Score vs. Days Overdue (Risk Matrix)
+                  </h3>
+                  <p class="analytics-chart-subtitle">Analytical 2D scatter graph plotting maintenance urgency. Circle size = block duration in hours. Hover points for request details.</p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <span style="font-size: 12px; color: var(--color-text-muted);"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#1a56db;margin-right:4px;"></span>ENG</span>
+                  <span style="font-size: 12px; color: var(--color-text-muted);"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#d97706;margin-right:4px;"></span>TRD</span>
+                  <span style="font-size: 12px; color: var(--color-text-muted);"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#16a34a;margin-right:4px;"></span>S&amp;T</span>
+                  <span class="badge badge-critical"><i class="fa-solid fa-triangle-exclamation"></i> Critical Zone (Top-Right)</span>
+                </div>
+              </div>
+              <div class="analytics-chart-container" id="container-risk-matrix" style="min-height: 320px; overflow-x: auto;">
+                <svg id="svg-risk-matrix" width="100%" height="320" style="min-width: 600px;"></svg>
+              </div>
+            </div>
+
+            <!-- Charts Row 3: Historical Fidelity & Traffic Heatmap -->
+            <div class="analytics-charts-grid" id="analytics-grid-row-3">
+              <!-- Chart 4: Block Execution Fidelity (Planned vs Actual) -->
+              <div class="analytics-chart-card" id="chart-card-history-fidelity">
+                <div class="analytics-chart-header">
+                  <div>
+                    <h3 class="analytics-chart-title">
+                      <i class="fa-solid fa-chart-line" style="color: var(--color-cyan);"></i>
+                      Block Execution Reliability (Planned vs. Actual)
+                    </h3>
+                    <p class="analytics-chart-subtitle">Historical adherence to granted block hours from past maintenance records</p>
+                  </div>
+                  <span class="badge badge-demo">Past Performance</span>
+                </div>
+                <div class="analytics-chart-container" id="container-history-fidelity">
+                  <svg id="svg-history-fidelity" width="100%" height="260" viewBox="0 0 500 260" preserveAspectRatio="none" style="width: 100%; height: 260px;"></svg>
+                </div>
+              </div>
+
+              <!-- Chart 5: Corridor Traffic Density & Optimal Block Window Heatmap -->
+              <div class="analytics-chart-card" id="chart-card-window-heatmap">
+                <div class="analytics-chart-header">
+                  <div>
+                    <h3 class="analytics-chart-title">
+                      <i class="fa-solid fa-table-cells" style="color: var(--color-amber);"></i>
+                      Weekly Time Slot Traffic &amp; Window Heatmap
+                    </h3>
+                    <p class="analytics-chart-subtitle">Synthetic corridor train congestion index by day &amp; time window</p>
+                  </div>
+                  <span class="badge badge-low"><i class="fa-solid fa-moon"></i> Night Shadow Preferred</span>
+                </div>
+                <div class="analytics-chart-container" id="container-window-heatmap">
+                  <div class="heatmap-wrap">
+                    <table class="heatmap-table" id="table-window-heatmap">
+                      <thead>
+                        <tr>
+                          <th style="text-align: left; width: 60px;">Day</th>
+                          <th>00:00–04:00<br><span style="font-weight: normal; font-size: 10px;">Night Shadow</span></th>
+                          <th>04:00–08:00<br><span style="font-weight: normal; font-size: 10px;">Morning Peak</span></th>
+                          <th>08:00–12:00<br><span style="font-weight: normal; font-size: 10px;">Forenoon</span></th>
+                          <th>12:00–16:00<br><span style="font-weight: normal; font-size: 10px;">Afternoon</span></th>
+                          <th>16:00–20:00<br><span style="font-weight: normal; font-size: 10px;">Evening Peak</span></th>
+                          <th>20:00–24:00<br><span style="font-weight: normal; font-size: 10px;">Late Evening</span></th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbody-window-heatmap">
+                        <!-- Populated by JS -->
+                      </tbody>
+                    </table>
+                    <div class="heatmap-legend-bar">
+                      <span><span class="donut-dot" style="background:#22c55e;"></span> Optimal Block Window (&lt;2 trains)</span>
+                      <span><span class="donut-dot" style="background:#f59e0b;"></span> Moderate Congestion (2–4 trains)</span>
+                      <span><span class="donut-dot" style="background:#ef4444;"></span> Heavy Passenger Traffic (High Delay)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Analytics Tooltip Container -->
+            <div id="analytics-chart-tooltip" class="analytics-tooltip"></div>
+          </section>
+
+          <!-- ========================================== -->
           <!-- PAGE: LIVE CORRIDOR TRACKING (GOOGLE MAPS) -->
           <!-- ========================================== -->
           <section class="page-view" id="view-corridor-tracking">
@@ -505,10 +761,13 @@
                 <span class="badge badge-demo" id="badge-corridor-synthetic">Synthetic Demo Data</span>
               </div>
               <div class="header-actions" id="corridor-header-actions">
+                <button class="btn-primary" id="btn-open-add-train-modal" style="display: inline-flex; align-items: center; gap: 6px;">
+                  <i class="fa-solid fa-plus"></i> Add Train Manually
+                </button>
                 <button class="btn-secondary" id="btn-recenter-map" title="Center view on Mumbai Railway Division">
                   <i class="fa-solid fa-crosshairs"></i> Recenter
                 </button>
-                <button class="btn-primary" id="btn-toggle-sim-trains">
+                <button class="btn-secondary" id="btn-toggle-sim-trains">
                   <i class="fa-solid fa-pause" id="sim-play-icon"></i> <span id="sim-play-text">Pause Motion</span>
                 </button>
               </div>
@@ -732,14 +991,33 @@
                         Distance computed via Great-Circle spherical formula. No track conflict detected.
                       </div>
                     </div>
+
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                      <button id="btn-inspector-focus-train" class="btn btn-secondary btn-sm" style="flex: 1; font-size: 11.5px; padding: 6px 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+                        <i class="fa-solid fa-crosshairs"></i> Focus on Map
+                      </button>
+                      <button id="btn-inspector-remove-train" class="btn btn-secondary btn-sm" style="font-size: 11.5px; padding: 6px 10px; color: var(--color-red); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" title="Remove this train from tracking">
+                        <i class="fa-solid fa-trash-can"></i> Remove
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 <!-- Active Trains List Card -->
                 <div class="card" style="padding: 14px; flex: 1; display: flex; flex-direction: column;" id="card-train-fleet-list">
-                  <div style="font-weight: 700; font-size: 13px; color: var(--color-navy); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                    <span>Active Corridor Trains</span>
-                    <span class="badge badge-low" id="fleet-count-badge">8 Trains</span>
+                  <div style="font-weight: 700; font-size: 13px; color: var(--color-navy); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <span>Active Corridor Trains</span>
+                      <span class="badge badge-low" id="fleet-count-badge">8 Trains</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <button id="btn-quick-add-train" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px;" title="Add train to tracking">
+                        <i class="fa-solid fa-plus"></i> Add Train
+                      </button>
+                      <button id="btn-reset-fleet" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 3px 7px; display: inline-flex; align-items: center; gap: 4px;" title="Reset fleet to default">
+                        <i class="fa-solid fa-rotate-left"></i>
+                      </button>
+                    </div>
                   </div>
 
                   <div style="overflow-y: auto; max-height: 250px; display: flex; flex-direction: column; gap: 6px;" id="corridor-train-list-container">
@@ -1222,7 +1500,7 @@
             <div class="page-header" id="about-header">
               <div class="page-title-wrap">
                 <h2 class="page-title" id="heading-about">About Yukti Rail</h2>
-                <span class="badge badge-demo"><i class="fa-solid fa-circle-info"></i> SIH Prototype</span>
+                <span class="badge badge-demo"><i class="fa-solid fa-flask"></i> Synthetic Prototype</span>
               </div>
             </div>
 
@@ -1320,7 +1598,7 @@
                     </h3>
                   </div>
                   <p class="about-disclaimer-text">
-                    This is a Smart India Hackathon frontend prototype using synthetic demonstration data. It is not connected to live Indian Railways systems and does not autonomously approve, grant or execute railway blocks.
+                    This platform is based entirely on synthetic data and is created for demonstration purposes only. It is not connected to live Indian Railways production systems and does not autonomously approve, grant, or execute railway blocks.
                   </p>
                 </div>
 
@@ -1355,8 +1633,8 @@
 
               <!-- Bottom Information Line -->
               <div class="about-footer-line" id="about-sih-footer-line">
-                <i class="fa-solid fa-award"></i>
-                <span>Smart India Hackathon 2026 | Problem Statement 26027</span>
+                <i class="fa-solid fa-circle-check"></i>
+                <span>Yukti Rail Intelligent Block Planning | Synthetic Demonstration Mode</span>
               </div>
             </div>
           </section>
@@ -1365,7 +1643,7 @@
 
         <!-- Footer -->
         <footer id="footer">
-          <span class="footer-left" id="footer-hackathon-text">Smart India Hackathon 2026 | PS 26027</span>
+          <span class="footer-left" id="footer-hackathon-text">Yukti Rail | Synthetic Demonstration Mode</span>
           <span class="footer-right" id="footer-policy-text">AI recommends, railway officials approve</span>
         </footer>
       </div>
@@ -1505,6 +1783,149 @@
           </button>
           <button class="btn-primary btn-close-modal">
             Apply &amp; Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Train Manually Modal Dialog -->
+    <div class="modal-overlay" id="modal-add-train" role="dialog" aria-modal="true" aria-labelledby="modal-add-train-title" style="display: none;">
+      <div class="modal-box" style="max-width: 580px;">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-add-train-title">
+            <i class="fa-solid fa-train-subway" style="color: var(--color-railway-blue);"></i>
+            Add Train to Corridor Tracking
+          </h3>
+          <button class="btn-icon btn-close-modal" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size: 12px; color: var(--color-text-muted); line-height: 1.5; margin-top: 0; margin-bottom: 12px;">
+            Manually inject a train rake into the live Leaflet.js tracking engine. The train will progress along the track vector using real-time Turf.js interpolation and dynamically respond to active maintenance blocks.
+          </p>
+
+          <!-- Quick Autofill Presets -->
+          <div style="margin-bottom: 14px; padding: 10px 12px; background: var(--color-sidebar-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);">
+            <div style="font-size: 11.5px; font-weight: 700; color: var(--color-navy); margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+              <span><i class="fa-solid fa-bolt" style="color: var(--color-amber);"></i> Quick Presets:</span>
+              <span style="font-size: 10.5px; color: var(--color-text-muted);">1-click autofill sample</span>
+            </div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button" class="btn btn-secondary btn-sm preset-train-btn" data-number="12951" data-name="Mumbai Tejas Rajdhani" data-type="EXPRESS" data-corridor="KALYAN_IGATPURI" data-direction="DN" data-speed="110" data-station="KYN" style="font-size: 11px; padding: 4px 8px;">12951 Tejas Rajdhani</button>
+              <button type="button" class="btn btn-secondary btn-sm preset-train-btn" data-number="20901" data-name="Vande Bharat Express" data-type="EXPRESS" data-corridor="KALYAN_IGATPURI" data-direction="DN" data-speed="120" data-station="ASO" style="font-size: 11px; padding: 4px 8px;">20901 Vande Bharat</button>
+              <button type="button" class="btn btn-secondary btn-sm preset-train-btn" data-number="12123" data-name="Deccan Queen" data-type="EXPRESS" data-corridor="PUNE_LONAVALA" data-direction="DN" data-speed="95" data-station="PUNE" style="font-size: 11px; padding: 4px 8px;">12123 Deccan Queen</button>
+              <button type="button" class="btn btn-secondary btn-sm preset-train-btn" data-number="97214" data-name="Kalyan Fast Local" data-type="SUBURBAN" data-corridor="THANE_KALYAN" data-direction="DN" data-speed="70" data-station="TNA" style="font-size: 11px; padding: 4px 8px;">97214 Fast Local</button>
+              <button type="button" class="btn btn-secondary btn-sm preset-train-btn" data-number="BOXN-9944" data-name="Container Freight Rake" data-type="FREIGHT" data-corridor="KALYAN_IGATPURI" data-direction="DN" data-speed="42" data-station="TLA" style="font-size: 11px; padding: 4px 8px;">BOXN-9944 Freight</button>
+            </div>
+          </div>
+
+          <form id="form-add-train" onsubmit="return false;">
+            <!-- Train Number & Name -->
+            <div style="display: grid; grid-template-columns: 140px 1fr; gap: 10px; margin-bottom: 12px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="add-train-number" style="font-size: 12px; font-weight: 700; color: var(--color-navy);">
+                  Train / Rake # <span style="color: var(--color-red);">*</span>
+                </label>
+                <input type="text" id="add-train-number" class="form-control font-mono" placeholder="e.g. 12951" required style="font-size: 12.5px; padding: 7px 10px;">
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="add-train-name" style="font-size: 12px; font-weight: 700; color: var(--color-navy);">
+                  Train Service Name <span style="color: var(--color-red);">*</span>
+                </label>
+                <input type="text" id="add-train-name" class="form-control" placeholder="e.g. Mumbai Tejas Rajdhani" required style="font-size: 12.5px; padding: 7px 10px;">
+              </div>
+            </div>
+
+            <!-- Category & Direction -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="add-train-type" style="font-size: 12px; font-weight: 700; color: var(--color-navy);">
+                  Train Category
+                </label>
+                <select id="add-train-type" class="form-control" style="font-size: 12.5px; padding: 7px 10px;">
+                  <option value="EXPRESS">Mail / Superfast / Rajdhani</option>
+                  <option value="SUBURBAN">Suburban EMU Local</option>
+                  <option value="FREIGHT">Freight &amp; Goods Rakes</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="add-train-direction" style="font-size: 12px; font-weight: 700; color: var(--color-navy);">
+                  Track Direction
+                </label>
+                <select id="add-train-direction" class="form-control" style="font-size: 12.5px; padding: 7px 10px;">
+                  <option value="DN">Down Line (DN - Outbound / North)</option>
+                  <option value="UP">Up Line (UP - Inbound / CSMT)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Corridor Section -->
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="form-label" for="add-train-corridor" style="font-size: 12px; font-weight: 700; color: var(--color-navy);">
+                Corridor Section
+              </label>
+              <select id="add-train-corridor" class="form-control" style="font-size: 12.5px; padding: 7px 10px; font-weight: 600;">
+                <option value="KALYAN_IGATPURI">Kalyan–Igatpuri (Thal Ghat Corridor)</option>
+                <option value="PUNE_LONAVALA">Pune–Lonavala (Bhor Ghat Corridor)</option>
+                <option value="THANE_KALYAN">Thane–Kalyan (Quadruple Track Line)</option>
+                <option value="DADAR_KURLA">Dadar–Kurla (Urban High-Density Line)</option>
+              </select>
+            </div>
+
+            <!-- Starting Station & Progression Slider -->
+            <div style="padding: 12px; background: var(--color-sidebar-hover); border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" for="add-train-start-station" style="font-size: 12px; font-weight: 700; color: var(--color-navy);">
+                    Starting Station / Location
+                  </label>
+                  <select id="add-train-start-station" class="form-control" style="font-size: 12.5px; padding: 6px 8px;">
+                    <!-- Populated dynamically based on corridor -->
+                  </select>
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--color-navy);">Track Position:</span>
+                    <span id="add-train-progress-text" class="font-mono" style="font-size: 12px; font-weight: 700; color: var(--color-railway-blue);">15% along route</span>
+                  </div>
+                  <input type="range" id="add-train-progress-slider" min="0" max="98" value="15" style="width: 100%; accent-color: var(--color-railway-blue); cursor: pointer; margin-top: 6px;">
+                </div>
+              </div>
+              <div style="font-size: 11px; color: var(--color-text-muted);">
+                Select a station or drag the slider to place the train at any point along the corridor polyline.
+              </div>
+            </div>
+
+            <!-- Speed & Signal -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <label class="form-label" for="add-train-speed" style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 0;">
+                    Speed (km/h)
+                  </label>
+                  <span id="add-train-speed-badge" class="font-mono" style="font-size: 11.5px; font-weight: 700; color: var(--color-navy);">90 km/h</span>
+                </div>
+                <input type="number" id="add-train-speed" class="form-control font-mono" min="20" max="140" value="90" style="font-size: 12.5px; padding: 7px 10px;">
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="add-train-signal" style="font-size: 12px; font-weight: 700; color: var(--color-navy);">
+                  Initial Signal Aspect
+                </label>
+                <select id="add-train-signal" class="form-control" style="font-size: 12.5px; padding: 7px 10px;">
+                  <option value="Double Green">Double Green (Normal Speed)</option>
+                  <option value="Attention (Yellow)">Attention - Single Yellow</option>
+                  <option value="Caution Speed">Caution Speed (Approaching Worksite)</option>
+                  <option value="Restrictive (Caution 30 km/h)">Restrictive Caution (30 km/h)</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="add-train-error" style="display: none; padding: 8px 12px; background: #fee2e2; border: 1px solid #fecaca; border-radius: var(--radius-sm); color: #b91c1c; font-size: 12px; margin-top: 10px;"></div>
+          </form>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 8px;">
+          <button type="button" class="btn-secondary btn-close-modal">Cancel</button>
+          <button type="button" class="btn-primary" id="btn-submit-add-train">
+            <i class="fa-solid fa-plus"></i> Add Train to Tracking
           </button>
         </div>
       </div>

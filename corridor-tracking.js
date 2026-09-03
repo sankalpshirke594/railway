@@ -439,8 +439,8 @@ export class CorridorTrackingEngine {
     this.simRunning = true;
     this.animationFrameId = null;
 
-    this.trains = JSON.parse(JSON.stringify(INITIAL_TRAINS));
-    this.selectedTrainId = "T101";
+    this.trains = this.loadTrains();
+    this.selectedTrainId = this.trains.length > 0 ? this.trains[0].id : "T101";
 
     // Leaflet Layers & Markers
     this.layers = {
@@ -484,10 +484,34 @@ export class CorridorTrackingEngine {
 
     this.initMap();
     this.bindUIEvents();
+    this.setupAddTrainModal();
     this.renderFleetList();
     this.updateInspector(this.selectedTrainId);
     this.updateGeometryMetrics();
     this.startSimulationLoop();
+  }
+
+  loadTrains() {
+    try {
+      const saved = localStorage.getItem("yukti_corridor_trains");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load saved trains:", e);
+    }
+    return JSON.parse(JSON.stringify(INITIAL_TRAINS));
+  }
+
+  saveTrains() {
+    try {
+      localStorage.setItem("yukti_corridor_trains", JSON.stringify(this.trains));
+    } catch (e) {
+      console.warn("Could not save trains:", e);
+    }
   }
 
   waitForLeaflet() {
@@ -728,15 +752,19 @@ export class CorridorTrackingEngine {
 
       let wrap = this.layers.trains.get(train.id);
       if (!wrap) {
+        const isManual = train.isManual ? "manual-train" : "";
         const trainIcon = L.divIcon({
           className: "leaflet-train-marker-wrap",
           html: `
-            <div class="rail-train-marker ${train.id === this.selectedTrainId ? "selected" : ""}" id="train-marker-${train.id}">
+            <div class="rail-train-marker ${train.id === this.selectedTrainId ? "selected" : ""} ${isManual}" id="train-marker-${train.id}">
               <div class="train-icon-wrap" style="transform: rotate(${Math.round(heading)}deg);">
                 <i class="fa-solid fa-train"></i>
               </div>
               <div style="display: flex; flex-direction: column; line-height: 1.1;">
-                <span>${train.number}</span>
+                <span style="display: flex; align-items: center; gap: 3px;">
+                  ${train.number}
+                  ${train.isManual ? '<span style="font-size:7px; background:#2563eb; color:#fff; padding:0 3px; border-radius:2px; font-weight:800;">M</span>' : ""}
+                </span>
                 <span class="train-speed-txt" style="font-size: 8.5px; opacity: 0.85;">${Math.round(train.speed)} km/h</span>
               </div>
             </div>
@@ -1106,6 +1134,17 @@ export class CorridorTrackingEngine {
         )} km</strong> from block zone ${nearestBlk ? nearestBlk.reqId : "N/A"}. Track orientation: <strong>${heading}°</strong>.
       `;
     }
+
+    const statusBadge = document.getElementById("inspector-status-badge");
+    if (statusBadge) {
+      if (train.isManual) {
+        statusBadge.textContent = "MANUAL ENTRY";
+        statusBadge.className = "badge badge-primary";
+      } else {
+        statusBadge.textContent = "SCHEDULED";
+        statusBadge.className = "badge badge-success";
+      }
+    }
   }
 
   renderFleetList() {
@@ -1121,30 +1160,47 @@ export class CorridorTrackingEngine {
       const row = document.createElement("div");
       row.className = `corridor-train-row ${t.id === this.selectedTrainId ? "active" : ""}`;
       row.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <div style="width: 26px; height: 26px; border-radius: 6px; background: var(--color-sidebar-hover); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--color-railway-blue);">
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+          <div style="width: 26px; height: 26px; border-radius: 6px; background: var(--color-sidebar-hover); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--color-railway-blue); flex-shrink: 0;">
             <i class="fa-solid fa-train"></i>
           </div>
-          <div>
-            <div style="font-weight: 700; font-size: 12.5px; color: var(--color-navy);">${t.number}</div>
-            <div style="font-size: 11px; color: var(--color-text-muted);">${t.name}</div>
+          <div style="min-width: 0;">
+            <div style="font-weight: 700; font-size: 12px; color: var(--color-navy); display: flex; align-items: center; gap: 5px;">
+              <span>${t.number}</span>
+              ${t.isManual ? '<span class="badge" style="background: rgba(37,99,235,0.12); color: #2563eb; font-size: 8px; padding: 1px 4px; font-weight: 700; border-radius: 3px;">MANUAL</span>' : ''}
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 130px;">${t.name}</div>
           </div>
         </div>
-        <div style="text-align: right;">
-          <div style="font-size: 12.5px; font-weight: 700; color: var(--color-navy);">${Math.round(t.speed)} km/h</div>
-          <span style="font-size: 10px; color: ${
-            t.signal.includes("Green")
-              ? "var(--color-green)"
-              : t.signal.includes("Yellow")
-              ? "var(--color-amber)"
-              : "var(--color-red)"
-          }; font-weight: 600;">${t.signal.split(" ")[0]}</span>
+        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+          <div style="text-align: right;">
+            <div style="font-size: 12px; font-weight: 700; color: var(--color-navy);">${Math.round(t.speed)} km/h</div>
+            <span style="font-size: 9.5px; color: ${
+              t.signal.includes("Green")
+                ? "var(--color-green)"
+                : t.signal.includes("Yellow")
+                ? "var(--color-amber)"
+                : "var(--color-red)"
+            }; font-weight: 600;">${t.signal.split(" ")[0]}</span>
+          </div>
+          <button class="btn-remove-row-train" data-id="${t.id}" title="Remove train ${t.number} from tracking" style="width: 22px; height: 22px; border-radius: 4px; border: none; background: transparent; color: var(--color-text-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;">
+            <i class="fa-solid fa-xmark" style="font-size: 11px;"></i>
+          </button>
         </div>
       `;
 
-      row.addEventListener("click", () => {
+      row.addEventListener("click", (e) => {
+        if (e.target.closest(".btn-remove-row-train")) return;
         this.selectTrain(t.id);
       });
+
+      const delBtn = row.querySelector(".btn-remove-row-train");
+      if (delBtn) {
+        delBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.removeTrain(t.id);
+        });
+      }
 
       listContainer.appendChild(row);
     });
@@ -1372,6 +1428,383 @@ export class CorridorTrackingEngine {
       btnResetView.addEventListener("click", () => {
         this.resetMapView();
         if (modalSettings) modalSettings.style.display = "none";
+      });
+    }
+
+    // Inspector Focus Train
+    const btnFocus = document.getElementById("btn-inspector-focus-train");
+    if (btnFocus) {
+      btnFocus.addEventListener("click", () => {
+        if (this.selectedTrainId) {
+          const train = this.trains.find((t) => t.id === this.selectedTrainId);
+          if (train && this.map) {
+            const pos = this.getTrainPosition(train);
+            this.map.setView([pos.lat, pos.lng], 12, { animate: true });
+          }
+        }
+      });
+    }
+
+    // Inspector Remove Train
+    const btnInspectorRemove = document.getElementById("btn-inspector-remove-train");
+    if (btnInspectorRemove) {
+      btnInspectorRemove.addEventListener("click", () => {
+        if (this.selectedTrainId) {
+          this.removeTrain(this.selectedTrainId);
+        }
+      });
+    }
+  }
+
+  getStationFraction(corridorId, stationCode) {
+    const corridor = CORRIDORS_DATA[corridorId];
+    if (!corridor || !corridor.stations) return 0.15;
+    const station = corridor.stations.find((s) => s.code === stationCode);
+    if (!station) return 0.15;
+
+    try {
+      const line = TurfEngine.lineString(corridor.path.map((p) => [p.lng, p.lat]));
+      const totalKm = TurfEngine.length(line, { units: "kilometers" });
+      if (totalKm <= 0) return 0.15;
+
+      const stPt = TurfEngine.point([station.pos.lng, station.pos.lat]);
+      let bestDistKm = 0;
+      let minDiff = Infinity;
+      const samples = 40;
+      for (let i = 0; i <= samples; i++) {
+        const d = (i / samples) * totalKm;
+        const pt = TurfEngine.along(line, d, { units: "kilometers" });
+        const dist = TurfEngine.distance(stPt, pt, { units: "kilometers" });
+        if (dist < minDiff) {
+          minDiff = dist;
+          bestDistKm = d;
+        }
+      }
+      return Math.min(0.96, Math.max(0.02, bestDistKm / totalKm));
+    } catch (e) {
+      const idx = corridor.stations.indexOf(station);
+      return Math.min(0.95, Math.max(0.02, idx / Math.max(1, corridor.stations.length - 1)));
+    }
+  }
+
+  addTrain(data) {
+    const number = String(data.number || "").trim().toUpperCase();
+    const name = String(data.name || "").trim();
+    if (!number || !name) {
+      throw new Error("Train number and service name are required.");
+    }
+
+    const corridorId = data.corridorId || "KALYAN_IGATPURI";
+    if (!CORRIDORS_DATA[corridorId]) {
+      throw new Error(`Corridor ${corridorId} is not recognized.`);
+    }
+
+    const speed = Math.max(15, Math.min(150, parseFloat(data.speed) || 80));
+    const speedStep = (speed / 100) * 0.0005;
+    const progress = Math.max(0.01, Math.min(0.98, parseFloat(data.progress) || 0.15));
+    const type = data.type || "EXPRESS";
+    const direction = data.direction || "DN";
+    const signal = data.signal || "Double Green";
+
+    const id = "T_MANUAL_" + Date.now();
+    const newTrain = {
+      id,
+      number,
+      name,
+      type,
+      corridorId,
+      direction,
+      speed,
+      progress,
+      signal,
+      speedStep,
+      isManual: true,
+      addedAt: new Date().toISOString()
+    };
+
+    // Prepend new train to list
+    this.trains.unshift(newTrain);
+    this.saveTrains();
+
+    // Ensure corridor view displays this train
+    if (this.selectedCorridor !== "ALL" && this.selectedCorridor !== corridorId) {
+      this.selectedCorridor = corridorId;
+      const corridorSelect = document.getElementById("corridor-select");
+      if (corridorSelect) corridorSelect.value = corridorId;
+      this.renderPolylines();
+      this.renderStations();
+      this.renderBlocks();
+    }
+
+    this.renderTrainMarkers();
+    this.renderFleetList();
+    this.updateGeometryMetrics();
+    this.selectTrain(id);
+
+    if (window.showToast) {
+      window.showToast(`Train ${number} (${name}) added to ${CORRIDORS_DATA[corridorId].name} tracking!`, "success", 4000);
+    }
+
+    return newTrain;
+  }
+
+  removeTrain(trainId) {
+    const trainIndex = this.trains.findIndex((t) => t.id === trainId);
+    if (trainIndex === -1) return;
+
+    const removed = this.trains[trainIndex];
+    this.trains.splice(trainIndex, 1);
+    this.saveTrains();
+
+    // Clean up Leaflet marker
+    const wrap = this.layers.trains.get(trainId);
+    if (wrap && wrap.marker && this.map) {
+      this.map.removeLayer(wrap.marker);
+      this.layers.trains.delete(trainId);
+    }
+
+    // Select another train if the active one was deleted
+    if (this.selectedTrainId === trainId) {
+      const remaining = this.getFilteredTrains();
+      if (remaining.length > 0) {
+        this.selectTrain(remaining[0].id);
+      } else if (this.trains.length > 0) {
+        this.selectTrain(this.trains[0].id);
+      }
+    }
+
+    this.renderFleetList();
+    this.renderTrainMarkers();
+    this.updateGeometryMetrics();
+
+    if (window.showToast) {
+      window.showToast(`Train ${removed.number} removed from tracking`, "info", 2500);
+    }
+  }
+
+  resetFleetToDefault() {
+    if (this.map) {
+      for (const [id, wrap] of this.layers.trains.entries()) {
+        this.map.removeLayer(wrap.marker);
+      }
+    }
+    this.layers.trains.clear();
+
+    this.trains = JSON.parse(JSON.stringify(INITIAL_TRAINS));
+    this.saveTrains();
+    this.selectedTrainId = "T101";
+
+    this.renderFleetList();
+    this.renderTrainMarkers();
+    this.updateGeometryMetrics();
+    this.selectTrain("T101");
+
+    if (window.showToast) {
+      window.showToast("Fleet reset to standard 8 corridor trains", "info", 3000);
+    }
+  }
+
+  setupAddTrainModal() {
+    const modal = document.getElementById("modal-add-train");
+    const openBtn1 = document.getElementById("btn-open-add-train-modal");
+    const openBtn2 = document.getElementById("btn-quick-add-train");
+    const resetFleetBtn = document.getElementById("btn-reset-fleet");
+    const submitBtn = document.getElementById("btn-submit-add-train");
+    const corridorSelect = document.getElementById("add-train-corridor");
+    const stationSelect = document.getElementById("add-train-start-station");
+    const progressSlider = document.getElementById("add-train-progress-slider");
+    const progressText = document.getElementById("add-train-progress-text");
+    const speedInput = document.getElementById("add-train-speed");
+    const speedBadge = document.getElementById("add-train-speed-badge");
+    const typeSelect = document.getElementById("add-train-type");
+    const errorBox = document.getElementById("add-train-error");
+    const form = document.getElementById("form-add-train");
+
+    const populateStations = (corridorId) => {
+      if (!stationSelect) return;
+      stationSelect.innerHTML = "";
+      const corridor = CORRIDORS_DATA[corridorId];
+      if (!corridor || !corridor.stations) return;
+
+      const defaultOpt = document.createElement("option");
+      defaultOpt.value = "CUSTOM";
+      defaultOpt.textContent = "-- Choose Station / Track Start --";
+      stationSelect.appendChild(defaultOpt);
+
+      corridor.stations.forEach((st) => {
+        const opt = document.createElement("option");
+        opt.value = st.code;
+        opt.textContent = `${st.name} (${st.code})`;
+        stationSelect.appendChild(opt);
+      });
+    };
+
+    const openModal = () => {
+      if (!modal) return;
+      if (errorBox) errorBox.style.display = "none";
+      const currentCorridor = this.selectedCorridor !== "ALL" ? this.selectedCorridor : "KALYAN_IGATPURI";
+      if (corridorSelect) {
+        corridorSelect.value = currentCorridor;
+        populateStations(currentCorridor);
+      }
+      modal.style.display = "flex";
+    };
+
+    const closeModal = () => {
+      if (modal) modal.style.display = "none";
+    };
+
+    if (openBtn1) openBtn1.addEventListener("click", openModal);
+    if (openBtn2) openBtn2.addEventListener("click", openModal);
+
+    modal?.querySelectorAll(".btn-close-modal").forEach((btn) => {
+      btn.addEventListener("click", closeModal);
+    });
+
+    if (modal) {
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+      });
+    }
+
+    if (resetFleetBtn) {
+      resetFleetBtn.addEventListener("click", () => {
+        if (confirm("Reset train fleet back to default 8 scheduled trains?")) {
+          this.resetFleetToDefault();
+        }
+      });
+    }
+
+    if (corridorSelect) {
+      corridorSelect.addEventListener("change", (e) => {
+        populateStations(e.target.value);
+        if (progressSlider) {
+          progressSlider.value = 15;
+          if (progressText) progressText.textContent = "15% along route";
+        }
+      });
+    }
+
+    if (stationSelect) {
+      stationSelect.addEventListener("change", (e) => {
+        if (e.target.value === "CUSTOM") return;
+        const corrId = corridorSelect ? corridorSelect.value : "KALYAN_IGATPURI";
+        const frac = this.getStationFraction(corrId, e.target.value);
+        const pct = Math.round(frac * 100);
+        if (progressSlider) progressSlider.value = pct;
+        if (progressText) {
+          const stName = e.target.options[e.target.selectedIndex].text.split("(")[0].trim();
+          progressText.textContent = `${pct}% (At ${stName})`;
+        }
+      });
+    }
+
+    if (progressSlider) {
+      progressSlider.addEventListener("input", (e) => {
+        const val = e.target.value;
+        if (progressText) progressText.textContent = `${val}% along route`;
+        if (stationSelect) stationSelect.value = "CUSTOM";
+      });
+    }
+
+    if (speedInput) {
+      speedInput.addEventListener("input", (e) => {
+        if (speedBadge) speedBadge.textContent = `${e.target.value} km/h`;
+      });
+    }
+
+    if (typeSelect) {
+      typeSelect.addEventListener("change", (e) => {
+        const t = e.target.value;
+        let recSpeed = 90;
+        if (t === "EXPRESS") recSpeed = 105;
+        else if (t === "SUBURBAN") recSpeed = 70;
+        else if (t === "FREIGHT") recSpeed = 42;
+
+        if (speedInput) {
+          speedInput.value = recSpeed;
+          if (speedBadge) speedBadge.textContent = `${recSpeed} km/h`;
+        }
+      });
+    }
+
+    // Presets
+    const presetBtns = modal?.querySelectorAll(".preset-train-btn");
+    presetBtns?.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const num = btn.getAttribute("data-number");
+        const name = btn.getAttribute("data-name");
+        const type = btn.getAttribute("data-type");
+        const corr = btn.getAttribute("data-corridor");
+        const dir = btn.getAttribute("data-direction");
+        const spd = btn.getAttribute("data-speed");
+        const stn = btn.getAttribute("data-station");
+
+        const numInput = document.getElementById("add-train-number");
+        const nameInput = document.getElementById("add-train-name");
+        const dirSelect = document.getElementById("add-train-direction");
+
+        if (numInput) numInput.value = num;
+        if (nameInput) nameInput.value = name;
+        if (typeSelect) typeSelect.value = type;
+        if (dirSelect) dirSelect.value = dir;
+        if (corridorSelect) {
+          corridorSelect.value = corr;
+          populateStations(corr);
+        }
+        if (stationSelect && stn) {
+          stationSelect.value = stn;
+          const frac = this.getStationFraction(corr, stn);
+          const pct = Math.round(frac * 100);
+          if (progressSlider) progressSlider.value = pct;
+          if (progressText) progressText.textContent = `${pct}% along route`;
+        }
+        if (speedInput) {
+          speedInput.value = spd;
+          if (speedBadge) speedBadge.textContent = `${spd} km/h`;
+        }
+      });
+    });
+
+    if (submitBtn) {
+      submitBtn.addEventListener("click", () => {
+        const numInput = document.getElementById("add-train-number");
+        const nameInput = document.getElementById("add-train-name");
+        const dirSelect = document.getElementById("add-train-direction");
+        const sigSelect = document.getElementById("add-train-signal");
+
+        const numVal = numInput?.value.trim();
+        const nameVal = nameInput?.value.trim();
+
+        if (!numVal || !nameVal) {
+          if (errorBox) {
+            errorBox.textContent = "Please provide both Train / Rake # and Service Name.";
+            errorBox.style.display = "block";
+          }
+          return;
+        }
+
+        try {
+          const progressVal = (parseFloat(progressSlider?.value || "15") || 15) / 100;
+          this.addTrain({
+            number: numVal,
+            name: nameVal,
+            type: typeSelect?.value || "EXPRESS",
+            corridorId: corridorSelect?.value || "KALYAN_IGATPURI",
+            direction: dirSelect?.value || "DN",
+            speed: parseFloat(speedInput?.value || "90"),
+            progress: progressVal,
+            signal: sigSelect?.value || "Double Green"
+          });
+
+          closeModal();
+          if (form) form.reset();
+        } catch (err) {
+          if (errorBox) {
+            errorBox.textContent = err.message;
+            errorBox.style.display = "block";
+          }
+        }
       });
     }
   }

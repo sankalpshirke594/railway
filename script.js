@@ -1,6 +1,6 @@
 /**
  * Yukti Rail - AI-Powered Integrated Block Planning for Indian Railways
- * Smart India Hackathon 2026 | PS 26027
+ * Synthetic Data Demonstration Platform
  * Pure Vanilla JavaScript Client-Side Engine
  * 
  * NOTE: All data is synthetic prototype data for demonstration only.
@@ -338,6 +338,17 @@ function switchPage(pageId) {
     }, 40);
   }
 
+  // If switching to analytics, trigger charts render
+  if (pageId === "analytics") {
+    setTimeout(() => {
+      try {
+        renderAnalyticsView();
+      } catch (err) {
+        console.error("Analytics render error:", err);
+      }
+    }, 40);
+  }
+
   // Scroll to top of content safely
   try {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -352,6 +363,14 @@ window._switchPageImpl = switchPage;
 
 // Setup Dashboard Quick Nav Actions
 function setupDashboardInteractions() {
+  const btnViewAnalytics = document.getElementById("btn-dashboard-view-analytics");
+  if (btnViewAnalytics) {
+    btnViewAnalytics.addEventListener("click", (e) => {
+      e.preventDefault();
+      switchPage("analytics");
+    });
+  }
+
   const btnViewCorridor = document.getElementById("btn-dashboard-view-corridor");
   if (btnViewCorridor) {
     btnViewCorridor.addEventListener("click", (e) => {
@@ -440,6 +459,7 @@ function initApp() {
   try { setupWeeklySchedule(); } catch (err) { console.error("Weekly schedule setup error:", err); }
   try { setupSimulationModal(); } catch (err) { console.error("Simulation modal setup error:", err); }
   try { setupMobileDrawer(); } catch (err) { console.error("Mobile drawer setup error:", err); }
+  try { setupAnalytics(); } catch (err) { console.error("Analytics setup error:", err); }
   try { renderAllViews(); } catch (err) { console.error("Render views error:", err); }
   try { initCorridorTracking(); } catch (err) { console.error("Corridor tracking init error:", err); }
 }
