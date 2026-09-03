@@ -1,0 +1,1140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yukti Rail - AI-Powered Integrated Block Planning for Indian Railways</title>
+    <meta name="description" content="AI-Powered Integrated Block Planning for Indian Railways prototype dashboard." />
+    <meta property="og:title" content="Yukti Rail - Integrated Block Planning" />
+    <meta property="og:description" content="AI-Powered Integrated Block Planning for Indian Railways prototype dashboard." />
+    <meta property="og:type" content="website" />
+
+    <!-- Google Fonts - Sora for Yukti Rail app name/logo -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Font Awesome CDN for standard Railway Operations Icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+      crossorigin="anonymous"
+    />
+
+    <!-- Pure Vanilla CSS stylesheet -->
+    <link rel="stylesheet" href="./style.css" />
+
+    <!-- Safe early global stubs and error boundary for sandboxed iframe compatibility -->
+    <script>
+      (function() {
+        // Safe early declarations for inline and premature triggers
+        window.switchPage = function(pageId) {
+          if (window._switchPageImpl) {
+            window._switchPageImpl(pageId);
+          } else {
+            try { window.location.hash = pageId; } catch(e) {}
+          }
+        };
+        window.openSimulationModalForBlock = function(blockId) {
+          if (window._openSimulationModalForBlockImpl) {
+            window._openSimulationModalForBlockImpl(blockId);
+          }
+        };
+        window.showToast = function(msg, type) {
+          if (window._showToastImpl) {
+            window._showToastImpl(msg, type);
+          } else {
+            console.log('[YuktiRail]', type || 'info', msg);
+          }
+        };
+        // Gracefully trap unhandled benign errors
+        window.addEventListener('error', function(event) {
+          if (event && event.message && (
+            event.message.includes('Script error') ||
+            event.message.includes('ResizeObserver') ||
+            event.message.includes('websocket')
+          )) {
+            event.preventDefault();
+            return true;
+          }
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <!-- App Main Container -->
+    <div id="app-container">
+      
+      <!-- Mobile Backdrop Overlay -->
+      <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
+
+      <!-- Left Sidebar Navigation -->
+      <aside id="sidebar" class="integrated-rail-operations" aria-label="Main Navigation">
+        <!-- Sidebar Brand Header -->
+        <div class="sidebar-header" id="sidebar-brand-header">
+          <div class="brand-icon" id="sidebar-brand-icon">
+            <i class="fa-solid fa-train-subway"></i>
+          </div>
+          <div class="brand-text" id="sidebar-brand-text">
+            <h1>Yukti Rail</h1>
+            <span class="tagline">Integrated Rail Operations</span>
+          </div>
+          <button class="btn-sidebar-close" id="btn-sidebar-close" aria-label="Close navigation menu">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Sidebar Navigation Menu -->
+        <nav class="sidebar-nav" id="sidebar-navigation">
+          <a href="#dashboard" class="nav-item active" id="nav-dashboard" data-page="dashboard" role="button">
+            <span class="nav-item-content">
+              <i class="fa-solid fa-gauge-high"></i>
+              <span>Dashboard</span>
+            </span>
+          </a>
+
+          <a href="#requests" class="nav-item" id="nav-requests" data-page="requests" role="button">
+            <span class="nav-item-content">
+              <i class="fa-solid fa-screwdriver-wrench"></i>
+              <span>Maintenance Requests</span>
+            </span>
+            <span class="nav-badge" id="nav-badge-requests">25</span>
+          </a>
+
+          <a href="#recommendations" class="nav-item" id="nav-recommendations" data-page="recommendations" role="button">
+            <span class="nav-item-content">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>AI Recommendations</span>
+            </span>
+            <span class="nav-badge" id="nav-badge-recommendations" style="background-color: var(--color-green);">3</span>
+          </a>
+
+          <a href="#schedule" class="nav-item" id="nav-schedule" data-page="schedule" role="button">
+            <span class="nav-item-content">
+              <i class="fa-solid fa-calendar-week"></i>
+              <span>Weekly Schedule</span>
+            </span>
+            <span class="nav-badge" id="nav-badge-schedule">6</span>
+          </a>
+
+          <a href="#history" class="nav-item" id="nav-history" data-page="history" role="button">
+            <span class="nav-item-content">
+              <i class="fa-solid fa-clock-rotate-left"></i>
+              <span>Past Data</span>
+            </span>
+          </a>
+
+          <a href="#about" class="nav-item" id="nav-about" data-page="about" role="button">
+            <span class="nav-item-content">
+              <i class="fa-solid fa-circle-info"></i>
+              <span>About</span>
+            </span>
+          </a>
+        </nav>
+
+        <!-- Sidebar Footer / Status Indicators -->
+        <div class="sidebar-footer" id="sidebar-footer">
+          <!-- Visual Connectivity Status Indicator with Heartbeat Pulse -->
+          <div class="sidebar-connectivity-card" id="sidebar-connectivity-card" title="Click to ping railway server nodes" role="button" tabindex="0">
+            <div class="connectivity-header">
+              <div class="connectivity-pulse-wrap">
+                <span class="heartbeat-pulse" id="heartbeat-pulse-indicator" aria-hidden="true"></span>
+                <i class="fa-solid fa-tower-broadcast connectivity-icon"></i>
+                <span class="connectivity-title">Link Stability</span>
+              </div>
+              <span class="status-pill-online" id="connectivity-status-pill">STABLE</span>
+            </div>
+
+            <div class="connectivity-details">
+              <div class="connectivity-row">
+                <span class="conn-label">Node:</span>
+                <span class="conn-val font-mono" id="active-node-name">CRIS-MUM-01</span>
+              </div>
+              <div class="connectivity-row">
+                <span class="conn-label">Latency:</span>
+                <span class="conn-val font-mono conn-latency" id="active-node-latency">23ms</span>
+              </div>
+              <div class="connectivity-row">
+                <span class="conn-label">Heartbeat:</span>
+                <span class="conn-val" id="active-heartbeat-timer">Syncing...</span>
+              </div>
+            </div>
+
+            <!-- Signal Strength & Stability Meter -->
+            <div class="connectivity-meter" id="connectivity-meter">
+              <div class="signal-bars" id="signal-bars-indicator" aria-label="Signal Strength: 5 of 5 bars">
+                <span class="signal-bar bar-1"></span>
+                <span class="signal-bar bar-2"></span>
+                <span class="signal-bar bar-3"></span>
+                <span class="signal-bar bar-4"></span>
+                <span class="signal-bar bar-5"></span>
+              </div>
+              <div class="signal-status-wrap">
+                <span class="signal-status-label" id="signal-stability-text">99.98% Optimal</span>
+                <span class="signal-pulse-flash" id="signal-pulse-flash">● PING</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sidebar Engine Status Box -->
+          <div class="sidebar-status-box" id="sidebar-status-box">
+            <div class="sidebar-status-title">
+              <i class="fa-solid fa-circle"></i>
+              <span>Engine Active</span>
+            </div>
+            <div class="sidebar-status-line">Zone: Central Railway</div>
+            <div class="sidebar-status-line">Division: Mumbai / Bhusawal</div>
+            <div class="sidebar-status-line">Optimizer: Heuristic v4.2</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Body Area -->
+      <div id="main-wrapper">
+        
+        <!-- Top Operations Bar -->
+        <header id="topbar">
+          <div class="topbar-left" id="topbar-left-section">
+            <button class="btn-mobile-toggle" id="btn-mobile-menu" aria-label="Toggle navigation menu">
+              <i class="fa-solid fa-bars"></i>
+            </button>
+            <div class="topbar-title-group" id="topbar-title-group">
+              <h2 id="topbar-main-title">Yukti Rail</h2>
+              <p id="topbar-subtitle">AI-Powered Integrated Block Planning for Indian Railways</p>
+            </div>
+          </div>
+
+          <div class="topbar-right" id="topbar-right-section">
+            <span class="zone-chip" id="topbar-zone-chip">
+              <i class="fa-solid fa-location-dot"></i>
+              <span>CR Zone | Kalyan–Igatpuri–Pune</span>
+            </span>
+            <span class="badge badge-demo" id="topbar-demo-badge">
+              <i class="fa-solid fa-flask"></i> Synthetic Demo Data
+            </span>
+            <button class="btn-icon" id="btn-theme-toggle" aria-label="Toggle light and dark color scheme" title="Toggle theme">
+              <i class="fa-solid fa-moon"></i>
+            </button>
+            <div class="user-avatar-pill" id="topbar-user-avatar" title="Railway Operations Officer">RO</div>
+          </div>
+        </header>
+
+        <!-- Dynamic Content Area -->
+        <main id="content-area">
+
+          <!-- ========================================== -->
+          <!-- PAGE 1: DASHBOARD                          -->
+          <!-- ========================================== -->
+          <section class="page-view active" id="view-dashboard">
+            <div class="page-header" id="dashboard-header">
+              <div class="page-title-wrap">
+                <h2 class="page-title" id="heading-dashboard">Railway Block Planning Command Center</h2>
+                <span class="badge badge-demo" id="badge-dashboard-synthetic">Synthetic Demo Data</span>
+              </div>
+              <div class="header-actions">
+                <button class="btn-primary" id="btn-dashboard-view-recommendations">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> View AI Opportunities
+                </button>
+              </div>
+            </div>
+
+            <!-- 4 Metric Cards -->
+            <div class="grid-4" id="dashboard-metrics-grid">
+              <!-- Metric 1 -->
+              <div class="card metric-card" id="metric-card-total-requests">
+                <div class="metric-info">
+                  <div class="metric-label">Total Maintenance Requests</div>
+                  <div class="metric-value" id="val-total-requests">25</div>
+                  <div class="metric-subtext">Across 3 railway departments</div>
+                </div>
+                <div class="metric-icon-wrap">
+                  <i class="fa-solid fa-clipboard-list"></i>
+                </div>
+              </div>
+
+              <!-- Metric 2 -->
+              <div class="card metric-card danger" id="metric-card-safety-critical">
+                <div class="metric-info">
+                  <div class="metric-label">Safety-Critical Requests</div>
+                  <div class="metric-value" id="val-safety-critical">5</div>
+                  <div class="metric-subtext">Urgent rail & point inspections</div>
+                </div>
+                <div class="metric-icon-wrap">
+                  <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+              </div>
+
+              <!-- Metric 3 -->
+              <div class="card metric-card success" id="metric-card-integration-opps">
+                <div class="metric-info">
+                  <div class="metric-label">Integration Opportunities</div>
+                  <div class="metric-value" id="val-integration-opps">3</div>
+                  <div class="metric-subtext">Can save ~14 line occupancy hrs</div>
+                </div>
+                <div class="metric-icon-wrap">
+                  <i class="fa-solid fa-object-group"></i>
+                </div>
+              </div>
+
+              <!-- Metric 4 -->
+              <div class="card metric-card warning" id="metric-card-planned-blocks">
+                <div class="metric-info">
+                  <div class="metric-label">Planned Blocks This Week</div>
+                  <div class="metric-value" id="val-planned-blocks">6</div>
+                  <div class="metric-subtext">Coordinated night & day windows</div>
+                </div>
+                <div class="metric-icon-wrap">
+                  <i class="fa-solid fa-calendar-check"></i>
+                </div>
+              </div>
+            </div>
+
+            <!-- Middle Section: Today's Alerts & Department Distribution -->
+            <div class="grid-2" id="dashboard-middle-grid">
+              
+              <!-- Today's Alerts Panel -->
+              <div class="card" id="card-todays-alerts">
+                <div class="card-header">
+                  <h3 class="card-title">
+                    <i class="fa-solid fa-bell" style="color: var(--color-amber);"></i>
+                    Today's Operational Alerts
+                  </h3>
+                  <span class="badge badge-critical" id="badge-active-alerts-count">3 Active</span>
+                </div>
+                <div class="alert-list" id="alerts-list-container">
+                  <!-- Alert 1 -->
+                  <div class="alert-item critical" id="alert-item-rail-defect">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <div class="alert-content">
+                      <div class="alert-title">Critical rail defect: Kalyan–Igatpuri DN</div>
+                      <div class="alert-desc">REQ-001 (Rail Renewal) overdue by 15 days; requires immediate track possession.</div>
+                    </div>
+                    <button class="alert-action-btn" aria-label="Review REQ-001">Review</button>
+                  </div>
+
+                  <!-- Alert 2 -->
+                  <div class="alert-item opportunity" id="alert-item-integration-opp">
+                    <i class="fa-solid fa-lightbulb"></i>
+                    <div class="alert-content">
+                      <div class="alert-title">3 departmental requests can be integrated</div>
+                      <div class="alert-desc">Engineering, TRD, and S&T requests overlap on Kalyan–Igatpuri DN.</div>
+                    </div>
+                    <button class="alert-action-btn" aria-label="Inspect AI Integration">Inspect</button>
+                  </div>
+
+                  <!-- Alert 3 -->
+                  <div class="alert-item conflict" id="alert-item-scheduling-conflict">
+                    <i class="fa-solid fa-code-merge"></i>
+                    <div class="alert-content">
+                      <div class="alert-title">One scheduling conflict requires review</div>
+                      <div class="alert-desc">Pune–Lonavala DN Thursday 02:00–05:00 has 2 competing department requests.</div>
+                    </div>
+                    <button class="alert-action-btn" aria-label="Resolve conflict">Resolve</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Department Distribution Visualization -->
+              <div class="card" id="card-dept-distribution">
+                <div class="card-header">
+                  <h3 class="card-title">
+                    <i class="fa-solid fa-chart-pie" style="color: var(--color-railway-blue);"></i>
+                    Department Request Distribution
+                  </h3>
+                  <span class="badge badge-low">Total: 25 Requests</span>
+                </div>
+                <div class="dept-chart-wrap" id="dept-chart-wrap">
+                  <!-- Engineering Bar -->
+                  <div class="dept-bar-item" id="dept-bar-engineering">
+                    <div class="dept-bar-header">
+                      <span>Engineering (P-Way / Track)</span>
+                      <span><strong>10 requests</strong> (40%)</span>
+                    </div>
+                    <div class="dept-bar-track">
+                      <div class="dept-bar-fill dept-engineering" style="width: 40%;"></div>
+                    </div>
+                  </div>
+
+                  <!-- TRD Bar -->
+                  <div class="dept-bar-item" id="dept-bar-trd">
+                    <div class="dept-bar-header">
+                      <span>TRD (Traction Distribution / OHE)</span>
+                      <span><strong>8 requests</strong> (32%)</span>
+                    </div>
+                    <div class="dept-bar-track">
+                      <div class="dept-bar-fill dept-trd" style="width: 32%;"></div>
+                    </div>
+                  </div>
+
+                  <!-- S&T Bar -->
+                  <div class="dept-bar-item" id="dept-bar-snt">
+                    <div class="dept-bar-header">
+                      <span>S&T (Signal & Telecommunication)</span>
+                      <span><strong>7 requests</strong> (28%)</span>
+                    </div>
+                    <div class="dept-bar-track">
+                      <div class="dept-bar-fill dept-snt" style="width: 28%;"></div>
+                    </div>
+                  </div>
+
+                  <!-- Legend -->
+                  <div class="dept-legend">
+                    <div class="legend-item">
+                      <span class="legend-dot" style="background-color: #1a56db;"></span>
+                      <span>Engineering: Rails, Sleepers, Ballast</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-dot" style="background-color: #d97706;"></span>
+                      <span>TRD: Overhead Catenary, Isolators</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-dot" style="background-color: #16a34a;"></span>
+                      <span>S&T: Signals, Point Machines, Interlocking</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bottom Section: Upcoming Blocks Table -->
+            <div class="card" id="card-dashboard-upcoming-blocks">
+              <div class="card-header">
+                <h3 class="card-title">
+                  <i class="fa-solid fa-clock" style="color: var(--color-railway-blue);"></i>
+                  Upcoming Planned Blocks
+                </h3>
+                <button class="btn-secondary" id="btn-view-full-schedule">
+                  View Full Schedule <i class="fa-solid fa-arrow-right"></i>
+                </button>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table" id="table-upcoming-blocks">
+                  <thead>
+                    <tr>
+                      <th>Window & Day</th>
+                      <th>Time Slot</th>
+                      <th>Railway Section</th>
+                      <th>Participating Departments</th>
+                      <th>Train Traffic Impact</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <strong>Tue, 01:00–06:00</strong>
+                        <div class="metric-subtext">(5 Hours)</div>
+                      </td>
+                      <td><strong>Kalyan–Igatpuri DN</strong></td>
+                      <td>
+                        <div class="dept-pill-group">
+                          <span class="dept-pill eng">ENG</span>
+                          <span class="dept-pill trd">TRD</span>
+                          <span class="dept-pill snt">S&T</span>
+                        </div>
+                      </td>
+                      <td><span class="badge badge-critical">3 trains affected</span></td>
+                      <td><span class="badge badge-success">Scheduled</span></td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <strong>Thu, 02:00–05:00</strong>
+                        <div class="metric-subtext">(3 Hours)</div>
+                      </td>
+                      <td><strong>Pune–Lonavala DN</strong></td>
+                      <td>
+                        <div class="dept-pill-group">
+                          <span class="dept-pill eng">ENG</span>
+                        </div>
+                      </td>
+                      <td><span class="badge badge-low">2 trains affected</span></td>
+                      <td><span class="badge badge-high">Conflict Review</span></td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <strong>Sat, 01:30–04:30</strong>
+                        <div class="metric-subtext">(3 Hours)</div>
+                      </td>
+                      <td><strong>Thane–Kalyan DN</strong></td>
+                      <td>
+                        <div class="dept-pill-group">
+                          <span class="dept-pill trd">TRD</span>
+                          <span class="dept-pill snt">S&T</span>
+                        </div>
+                      </td>
+                      <td><span class="badge badge-low">2 trains affected</span></td>
+                      <td><span class="badge badge-success">Scheduled</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========================================== -->
+          <!-- PAGE 2: MAINTENANCE REQUESTS               -->
+          <!-- ========================================== -->
+          <section class="page-view" id="view-requests">
+            <div class="page-header" id="requests-header">
+              <div class="page-title-wrap">
+                <h2 class="page-title" id="heading-requests">Departmental Maintenance Requests</h2>
+                <span class="badge badge-demo" id="badge-requests-synthetic">Synthetic Demo Data</span>
+              </div>
+              <span class="badge badge-low" id="requests-count-badge">Showing 12 of 12 requests</span>
+            </div>
+
+            <!-- Filter Controls Bar -->
+            <div class="card" style="margin-bottom: 20px; padding: 16px;" id="card-requests-filters">
+              <div class="filter-bar">
+                <!-- Search Input -->
+                <div class="search-input-wrap">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input
+                    type="text"
+                    id="req-search"
+                    class="search-input"
+                    placeholder="Search by Section (e.g. Kalyan) or Request ID..."
+                    aria-label="Search requests"
+                  />
+                </div>
+
+                <!-- Department Filter -->
+                <select id="req-dept-filter" class="filter-select" aria-label="Filter by department">
+                  <option value="All">All Departments</option>
+                  <option value="Engineering">Engineering</option>
+                  <option value="TRD">TRD (Traction)</option>
+                  <option value="S&T">S&T (Signals)</option>
+                </select>
+
+                <!-- Severity Filter -->
+                <select id="req-severity-filter" class="filter-select" aria-label="Filter by severity">
+                  <option value="All">All Severities</option>
+                  <option value="Critical">Critical (Red)</option>
+                  <option value="High">High (Orange)</option>
+                  <option value="Medium">Medium (Blue)</option>
+                  <option value="Low">Low (Grey)</option>
+                </select>
+
+                <!-- Reset Button -->
+                <button id="req-reset-filter" class="btn-secondary" aria-label="Reset filter controls">
+                  <i class="fa-solid fa-rotate-left"></i> Reset
+                </button>
+              </div>
+            </div>
+
+            <!-- Requests Table -->
+            <div class="card" id="card-requests-table">
+              <div class="table-responsive">
+                <table class="data-table" id="table-maintenance-requests">
+                  <thead>
+                    <tr>
+                      <th>Request ID</th>
+                      <th>Section</th>
+                      <th>Department</th>
+                      <th>Work Type</th>
+                      <th>Severity</th>
+                      <th>Overdue Days</th>
+                      <th>Priority Score</th>
+                      <th>Required Duration</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="requests-tbody">
+                    <!-- Populated dynamically by script.js -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========================================== -->
+          <!-- PAGE 3: AI RECOMMENDATIONS                 -->
+          <!-- ========================================== -->
+          <section class="page-view" id="view-recommendations">
+            <div class="page-header" id="recommendations-header">
+              <div class="page-title-wrap">
+                <h2 class="page-title" id="heading-ai-recommendations">AI-Assisted Integrated Block Recommendations</h2>
+                <span class="badge badge-demo">Synthetic Demo Data</span>
+              </div>
+            </div>
+
+            <!-- Mandatory Prototype Notice Banner -->
+            <div class="callout-banner callout-warning" id="banner-ai-disclaimer">
+              <i class="fa-solid fa-triangle-exclamation" style="font-size: 18px;"></i>
+              <div>
+                <strong>Prototype recommendation only.</strong> Final block approval remains with authorized railway officers (Sr. DOM / DRM).
+              </div>
+            </div>
+
+            <!-- Card 1: Large Integration Recommendation Card -->
+            <div class="recommendation-card" id="card-integration-rec">
+              <div class="rec-header">
+                <div class="rec-title-wrap">
+                  <h3>
+                    <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--color-railway-blue);"></i>
+                    Integrated Multi-Department Block Opportunity
+                  </h3>
+                  <div class="rec-subtitle">
+                    Target Railway Section: <strong>Kalyan–Igatpuri DN (Km 54/10 – 85/20)</strong>
+                  </div>
+                  <div class="linked-tags">
+                    <span style="font-size: 12px; font-weight: 600; color: var(--color-text-muted);">Linked Requests:</span>
+                    <span class="linked-pill" title="Rail Renewal">REQ-001 (Engineering)</span>
+                    <span class="linked-pill" title="OHE Adjustment">REQ-002 (TRD)</span>
+                    <span class="linked-pill" title="Signal Shifting">REQ-003 (S&T)</span>
+                  </div>
+                </div>
+                <div>
+                  <span class="badge badge-critical" id="rec-card-status">
+                    <i class="fa-solid fa-bolt"></i> High Synergy Opportunity
+                  </span>
+                </div>
+              </div>
+
+              <!-- Side-by-Side Comparison Container -->
+              <div class="comparison-container" id="comparison-container">
+                <!-- Without Integration -->
+                <div class="compare-box without" id="box-without-integration">
+                  <div class="compare-title">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                    Without Integration
+                  </div>
+                  <div class="compare-metrics">
+                    <div class="compare-metric-row">
+                      <span>Separate blocks required:</span>
+                      <span class="val" style="color: var(--color-red);">3 separate blocks</span>
+                    </div>
+                    <div class="compare-metric-row">
+                      <span>Total planned block-hours:</span>
+                      <span class="val" style="color: var(--color-red);">11 block-hours</span>
+                    </div>
+                    <div class="compare-metric-row">
+                      <span>Simulated train impacts:</span>
+                      <span class="val" style="color: var(--color-red);">9 train impacts</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- With Integrated Block -->
+                <div class="compare-box with" id="box-with-integration">
+                  <div class="compare-title">
+                    <i class="fa-solid fa-circle-check"></i>
+                    With Integrated Block
+                  </div>
+                  <div class="compare-metrics">
+                    <div class="compare-metric-row">
+                      <span>Coordinated blocks required:</span>
+                      <span class="val" style="color: var(--color-green);">1 coordinated block</span>
+                    </div>
+                    <div class="compare-metric-row">
+                      <span>Total planned block-hours:</span>
+                      <span class="val" style="color: var(--color-green);">6 block-hours</span>
+                    </div>
+                    <div class="compare-metric-row">
+                      <span>Simulated train impacts:</span>
+                      <span class="val" style="color: var(--color-green);">3 train impacts</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Estimated Synthetic Savings -->
+                <div class="compare-box savings" id="box-estimated-savings">
+                  <div class="compare-title">
+                    <i class="fa-solid fa-piggy-bank"></i>
+                    Estimated Synthetic Saving
+                  </div>
+                  <div class="compare-metrics">
+                    <div class="compare-metric-row">
+                      <span>Block-hours saved:</span>
+                      <span class="val" style="color: var(--color-railway-blue);">5 block-hours saved</span>
+                    </div>
+                    <div class="compare-metric-row">
+                      <span>Simulated train disruptions saved:</span>
+                      <span class="val" style="color: var(--color-railway-blue);">6 fewer train impacts</span>
+                    </div>
+                    <div class="compare-metric-row">
+                      <span>Track possession efficiency:</span>
+                      <span class="val" style="color: var(--color-green);">+45.5% efficiency</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- "Why recommended?" Expandable Accordion -->
+              <div class="accordion" id="ai-accordion-why">
+                <button class="accordion-header" id="accordion-header-why" aria-expanded="false" aria-controls="accordion-body-why">
+                  <span><i class="fa-solid fa-circle-question" style="color: var(--color-railway-blue); margin-right: 8px;"></i> Why is this block integration recommended by Yukti Rail?</span>
+                  <i class="fa-solid fa-chevron-down"></i>
+                </button>
+                <div class="accordion-body" id="accordion-body-why">
+                  <ul class="rationale-list">
+                    <li>
+                      <i class="fa-solid fa-check"></i>
+                      <span><strong>Same Physical Section:</strong> All three departments (Engineering, TRD, and S&T) require track access on Kalyan–Igatpuri DN.</span>
+                    </li>
+                    <li>
+                      <i class="fa-solid fa-check"></i>
+                      <span><strong>Overlapping Timelines:</strong> Requested maintenance dates fall within the same 48-hour operational window.</span>
+                    </li>
+                    <li>
+                      <i class="fa-solid fa-check"></i>
+                      <span><strong>Safety Priority:</strong> Rail renewal (REQ-001) is safety-critical (overdue 15 days, score 92) and mandates total line possession.</span>
+                    </li>
+                    <li>
+                      <i class="fa-solid fa-check"></i>
+                      <span><strong>Optimal Window Available:</strong> A lower-traffic night corridor (Tuesday 01:00–07:00) provides 6 uninterrupted hours with minimum freight and mail congestion.</span>
+                    </li>
+                    <li>
+                      <i class="fa-solid fa-check"></i>
+                      <span><strong>Avoid Repeated Closures:</strong> Combining work prevents 3 separate speed restrictions (caution orders) and avoids multiple crew mobilizations.</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Action button -->
+              <div class="rec-action-bar" style="display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
+                <span style="font-size: 12px; color: var(--color-text-muted);">Requires Departmental & Operations review</span>
+                <button class="btn-primary" id="btn-combine-block">
+                  <i class="fa-solid fa-code-merge"></i> Combine Into One Block
+                </button>
+              </div>
+            </div>
+
+            <!-- Card 2: Conflict Detected Card -->
+            <div class="conflict-card" id="card-conflict-detected">
+              <div class="conflict-header">
+                <div class="conflict-title">
+                  <i class="fa-solid fa-triangle-exclamation"></i>
+                  Scheduling Conflict Detected: Track Possession Collision
+                </div>
+                <span class="badge badge-critical">Attention Needed</span>
+              </div>
+              <p style="font-size: 14px; color: var(--color-text-main); margin-bottom: 8px;">
+                <strong>Section: Pune–Lonavala DN</strong> | Scheduled Slot: <strong>Thursday 02:00–05:00</strong>
+              </p>
+              <p style="font-size: 13.5px; color: var(--color-text-muted);">
+                Two departments have filed conflicting block requests for the same track section during identical hours:
+                <strong>REQ-004</strong> (Engineering: Deep Screening BCM machine) and <strong>REQ-005</strong> (TRD: Catenary Wire Replacement).
+                Both require simultaneous track occupation which exceeds safe clearances if uncoordinated.
+              </p>
+              
+              <div class="conflict-actions">
+                <button class="btn-primary" id="btn-conflict-merge">
+                  <i class="fa-solid fa-code-merge"></i> Merge if compatible
+                </button>
+                <button class="btn-secondary" id="btn-conflict-friday">
+                  <i class="fa-solid fa-calendar-arrow-down"></i> Move to Friday
+                </button>
+                <button class="btn-danger" id="btn-conflict-separate">
+                  <i class="fa-solid fa-ban"></i> Keep Separate
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========================================== -->
+          <!-- PAGE 4: WEEKLY SCHEDULE                    -->
+          <!-- ========================================== -->
+          <section class="page-view" id="view-schedule">
+            <div class="page-header" id="schedule-header">
+              <div class="page-title-wrap">
+                <h2 class="page-title" id="heading-weekly-schedule">Weekly Railway Block Schedule</h2>
+                <span class="badge badge-demo">Synthetic Demo Data</span>
+              </div>
+              <div class="header-actions">
+                <button class="btn-primary btn-open-simulation" id="btn-open-sim-modal-header">
+                  <i class="fa-solid fa-chart-line"></i> Simulate Alternative
+                </button>
+              </div>
+            </div>
+
+            <!-- Approval Tracker / Progress Stepper -->
+            <div class="stepper-container" id="stepper-container">
+              <div class="stepper-header">
+                <span>Integrated Block Approval Stepper (Central Railway Protocol)</span>
+                <span id="stepper-current-stage-text" style="color: var(--color-railway-blue);">Active Stage: Department Review</span>
+              </div>
+
+              <div class="stepper-progress" id="stepper-progress">
+                <div class="stepper-line">
+                  <div class="stepper-line-fill" id="stepper-line-fill"></div>
+                </div>
+                <!-- Steps rendered by script.js -->
+              </div>
+
+              <!-- Action buttons to progress stepper -->
+              <div class="stepper-action-bar" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; border-top: 1px solid var(--color-divider); padding-top: 14px; flex-wrap: wrap;">
+                <button class="btn-secondary btn-open-simulation" id="btn-simulate-alt-stepper">
+                  <i class="fa-solid fa-flask-vial"></i> Simulate Alternative Window
+                </button>
+                <button class="btn-danger" id="btn-reject-block">
+                  <i class="fa-solid fa-xmark"></i> Reject
+                </button>
+                <button class="btn-primary" id="btn-approve-review">
+                  <i class="fa-solid fa-check"></i> Approve for Review
+                </button>
+              </div>
+            </div>
+
+            <!-- Weekly Schedule Table -->
+            <div class="card" id="card-schedule-table">
+              <div class="card-header">
+                <h3 class="card-title">
+                  <i class="fa-solid fa-calendar-days" style="color: var(--color-railway-blue);"></i>
+                  Planned Section Blocks (Current Week)
+                </h3>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table" id="table-weekly-blocks">
+                  <thead>
+                    <tr>
+                      <th>Block ID</th>
+                      <th>Day</th>
+                      <th>Time Slot</th>
+                      <th>Section</th>
+                      <th>Departments</th>
+                      <th>Duration</th>
+                      <th>Simulated Trains Affected</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="schedule-tbody">
+                    <!-- Populated dynamically by script.js -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========================================== -->
+          <!-- PAGE 5: BLOCK HISTORY                      -->
+          <!-- ========================================== -->
+          <section class="page-view" id="view-history">
+            <div class="page-header" id="history-header">
+              <div class="page-title-wrap">
+                <h2 class="page-title" id="heading-block-history">Past Data</h2>
+                <span class="badge badge-demo">Synthetic Demo Data</span>
+              </div>
+            </div>
+
+            <!-- 4 Top Metrics -->
+            <div class="grid-4" id="history-metrics-grid">
+              <div class="card metric-card success" id="metric-card-completion-rate">
+                <div class="metric-info">
+                  <div class="metric-label">Completion Rate</div>
+                  <div class="metric-value">82%</div>
+                  <div class="metric-subtext">Executed vs granted blocks</div>
+                </div>
+                <div class="metric-icon-wrap">
+                  <i class="fa-solid fa-percent"></i>
+                </div>
+              </div>
+
+              <div class="card metric-card" id="metric-card-block-utilization">
+                <div class="metric-info">
+                  <div class="metric-label">Average Utilization</div>
+                  <div class="metric-value">88%</div>
+                  <div class="metric-subtext">Actual time spent on track</div>
+                </div>
+                <div class="metric-icon-wrap">
+                  <i class="fa-solid fa-gauge"></i>
+                </div>
+              </div>
+
+              <div class="card metric-card danger" id="metric-card-deferred-blocks">
+                <div class="metric-info">
+                  <div class="metric-label">Deferred Blocks</div>
+                  <div class="metric-value">2</div>
+                  <div class="metric-subtext">Postponed for traffic priority</div>
+                </div>
+                <div class="metric-icon-wrap">
+                  <i class="fa-solid fa-pause"></i>
+                </div>
+              </div>
+
+              <div class="card metric-card success" id="metric-card-integrated-completed">
+                <div class="metric-info">
+                  <div class="metric-label">Integrated Completed</div>
+                  <div class="metric-value">4</div>
+                  <div class="metric-subtext">Multi-department joint blocks</div>
+                </div>
+                <div class="metric-icon-wrap">
+                  <i class="fa-solid fa-layer-group"></i>
+                </div>
+              </div>
+            </div>
+
+            <!-- History Table -->
+            <div class="card" id="card-history-table">
+              <div class="card-header">
+                <h3 class="card-title">
+                  <i class="fa-solid fa-table-list" style="color: var(--color-railway-blue);"></i>
+                  Recent Block Execution Records
+                </h3>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table" id="table-block-history">
+                  <thead>
+                    <tr>
+                      <th>Block ID</th>
+                      <th>Section</th>
+                      <th>Planned Duration</th>
+                      <th>Actual Duration</th>
+                      <th>Completion Status</th>
+                      <th>Deferment Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody id="history-tbody">
+                    <!-- Populated dynamically by script.js -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Clear Disclaimer Note -->
+            <div class="callout-banner callout-info" style="margin-top: 20px;" id="banner-history-disclaimer">
+              <i class="fa-solid fa-circle-info"></i>
+              <span>All metrics shown are synthetic prototype values, not live railway operational data.</span>
+            </div>
+          </section>
+
+          <!-- ========================================== -->
+          <!-- PAGE 6: ABOUT YUKTI RAIL                   -->
+          <!-- ========================================== -->
+          <section class="page-view" id="view-about">
+            <div class="page-header" id="about-header">
+              <div class="page-title-wrap">
+                <h2 class="page-title" id="heading-about">About Yukti Rail</h2>
+                <span class="badge badge-demo"><i class="fa-solid fa-circle-info"></i> SIH Prototype</span>
+              </div>
+            </div>
+
+            <p class="about-subtitle" id="subtitle-about">
+              AI-assisted integrated block planning prototype for Indian Railways
+            </p>
+
+            <div class="about-container" id="about-container">
+              <!-- Top Row: Problem and Solution -->
+              <div class="grid-2" id="about-grid-problem-solution">
+                <!-- Card 1: The Problem -->
+                <div class="card about-card" id="card-about-problem">
+                  <div class="card-header">
+                    <h3 class="card-title">
+                      <i class="fa-solid fa-triangle-exclamation" style="color: var(--color-amber);"></i>
+                      The Problem
+                    </h3>
+                  </div>
+                  <p class="about-card-text">
+                    Engineering, Traction Distribution and Signalling departments may require maintenance work on the same railway section. If planned separately, repeated blocks can affect train operations.
+                  </p>
+                </div>
+
+                <!-- Card 2: Our Solution -->
+                <div class="card about-card" id="card-about-solution">
+                  <div class="card-header">
+                    <h3 class="card-title">
+                      <i class="fa-solid fa-lightbulb" style="color: var(--color-railway-blue);"></i>
+                      Our Solution
+                    </h3>
+                  </div>
+                  <p class="about-card-text">
+                    Yukti Rail identifies compatible Engineering, TRD and S&T requests and recommends one integrated block for officer review.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Middle Row: How It Works and Key Features -->
+              <div class="grid-2" id="about-grid-workflow-features">
+                <!-- Card 3: How It Works -->
+                <div class="card about-card" id="card-about-how-it-works">
+                  <div class="card-header">
+                    <h3 class="card-title">
+                      <i class="fa-solid fa-list-ol" style="color: var(--color-railway-blue);"></i>
+                      How It Works
+                    </h3>
+                  </div>
+                  <div class="about-steps-list">
+                    <div class="about-step-item">
+                      <span class="about-step-num">1</span>
+                      <span class="about-step-desc">Collect maintenance requests</span>
+                    </div>
+                    <div class="about-step-item">
+                      <span class="about-step-num">2</span>
+                      <span class="about-step-desc">Prioritize safety and urgency</span>
+                    </div>
+                    <div class="about-step-item">
+                      <span class="about-step-num">3</span>
+                      <span class="about-step-desc">Recommend integrated blocks</span>
+                    </div>
+                    <div class="about-step-item">
+                      <span class="about-step-num">4</span>
+                      <span class="about-step-desc">Railway officials review and approve</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Card 4: Key Features -->
+                <div class="card about-card" id="card-about-features">
+                  <div class="card-header">
+                    <h3 class="card-title">
+                      <i class="fa-solid fa-star" style="color: var(--color-cyan);"></i>
+                      Key Features
+                    </h3>
+                  </div>
+                  <div class="about-feature-chips">
+                    <span class="about-chip"><i class="fa-solid fa-layer-group"></i> Integrated Block Recommendation</span>
+                    <span class="about-chip"><i class="fa-solid fa-calculator"></i> Explainable Priority Score</span>
+                    <span class="about-chip"><i class="fa-solid fa-route"></i> Corridor Visualization</span>
+                    <span class="about-chip"><i class="fa-solid fa-chart-line"></i> What-If Simulation</span>
+                    <span class="about-chip"><i class="fa-solid fa-user-check"></i> Human Approval Workflow</span>
+                    <span class="about-chip"><i class="fa-solid fa-clock-rotate-left"></i> Past Data Analytics</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Lower Row: Disclaimer and Technology Used -->
+              <div class="grid-2" id="about-grid-disclaimer-tech">
+                <!-- Card 5: Prototype Disclaimer -->
+                <div class="card about-card about-disclaimer-card" id="card-about-disclaimer">
+                  <div class="card-header">
+                    <h3 class="card-title" style="color: var(--color-railway-blue);">
+                      <i class="fa-solid fa-shield-halved"></i>
+                      Prototype Disclaimer
+                    </h3>
+                  </div>
+                  <p class="about-disclaimer-text">
+                    This is a Smart India Hackathon frontend prototype using synthetic demonstration data. It is not connected to live Indian Railways systems and does not autonomously approve, grant or execute railway blocks.
+                  </p>
+                </div>
+
+                <!-- Card 6: Technology Used -->
+                <div class="card about-card" id="card-about-technology">
+                  <div class="card-header">
+                    <h3 class="card-title">
+                      <i class="fa-solid fa-code" style="color: var(--color-railway-blue);"></i>
+                      Technology Used
+                    </h3>
+                  </div>
+                  <div class="about-tech-grid">
+                    <div class="about-tech-pill">
+                      <i class="fa-brands fa-html5" style="color: #e34f26;"></i>
+                      <span>HTML</span>
+                    </div>
+                    <div class="about-tech-pill">
+                      <i class="fa-brands fa-css3-alt" style="color: #1572b6;"></i>
+                      <span>CSS</span>
+                    </div>
+                    <div class="about-tech-pill">
+                      <i class="fa-brands fa-js" style="color: #eab308;"></i>
+                      <span>Vanilla JavaScript</span>
+                    </div>
+                    <div class="about-tech-pill">
+                      <i class="fa-solid fa-database" style="color: var(--color-cyan);"></i>
+                      <span>Synthetic Mock Data</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bottom Information Line -->
+              <div class="about-footer-line" id="about-sih-footer-line">
+                <i class="fa-solid fa-award"></i>
+                <span>Smart India Hackathon 2026 | Problem Statement 26027</span>
+              </div>
+            </div>
+          </section>
+
+        </main>
+
+        <!-- Footer -->
+        <footer id="footer">
+          <span class="footer-left" id="footer-hackathon-text">Smart India Hackathon 2026 | PS 26027</span>
+          <span class="footer-right" id="footer-policy-text">AI recommends, railway officials approve</span>
+        </footer>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- SIMULATION MODAL                           -->
+    <!-- ========================================== -->
+    <div class="modal-overlay" id="modal-simulation" role="dialog" aria-modal="true" aria-labelledby="modal-simulation-title">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-simulation-title">
+            <i class="fa-solid fa-chart-line" style="color: var(--color-railway-blue);"></i>
+            Simulate Alternative Block Window
+          </h3>
+          <button class="btn-icon btn-close-modal" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size: 13.5px; color: var(--color-text-muted); margin-bottom: 16px;">
+            Evaluate passenger and freight timetable collision risks for alternative block timings on selected sections.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label" for="sim-target-block">Selected Block</label>
+            <select id="sim-target-block" class="form-control">
+              <option value="BLK-INT01">Kalyan–Igatpuri DN (Integrated Block - 6.0 hrs)</option>
+              <option value="BLK-W01">Kalyan–Igatpuri DN (Original - 5.0 hrs)</option>
+              <option value="BLK-W02">Pune–Lonavala DN (3.0 hrs)</option>
+              <option value="BLK-W03">Thane–Kalyan DN (3.0 hrs)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="sim-day">Alternative Day</label>
+            <select id="sim-day" class="form-control">
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+              <option value="Friday">Friday</option>
+              <option value="Sunday">Sunday (Day Window)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="sim-time">Alternative Time Slot</label>
+            <select id="sim-time" class="form-control">
+              <option value="01:00–07:00">01:00–07:00 (Night Traffic Window)</option>
+              <option value="11:00–16:00">11:00–16:00 (Day Passenger Peak Window)</option>
+              <option value="23:00–04:00">23:00–04:00 (Late Night Window)</option>
+            </select>
+          </div>
+
+          <!-- Simulation Output Box -->
+          <div class="simulation-result-box" id="simulation-results">
+            <div style="font-size: 13px; font-weight: 700; color: var(--color-railway-blue); text-transform: uppercase; margin-bottom: 8px;">
+              <i class="fa-solid fa-square-poll-vertical"></i> Timetable Simulation Result
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; margin-bottom: 10px;">
+              <div>Original schedule: <strong id="sim-orig-impact" style="color: var(--color-green);">3 simulated trains affected</strong></div>
+              <div>Alternative schedule: <strong id="sim-alt-impact" style="color: var(--color-red);">6 simulated trains affected</strong></div>
+            </div>
+            <div style="padding: 10px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.7); font-size: 13px; color: var(--color-navy); border-left: 3px solid var(--color-railway-blue);">
+              <strong>Recommendation:</strong> <span id="sim-rec-text">Keep original night window because it has lower train occupancy.</span>
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 8px; font-style: italic;">
+              * Note: Simulated estimation based on synthetic Central Railway master timetable model.
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary btn-close-modal">Cancel</button>
+          <button class="btn-primary" id="btn-run-simulation">
+            <i class="fa-solid fa-play"></i> Run Simulation
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" aria-live="polite"></div>
+
+    <!-- Vanilla Javascript Logic -->
+    <script type="module" crossorigin src="./script.js"></script>
+  </body>
+</html>

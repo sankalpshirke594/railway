@@ -1,0 +1,8 @@
+{
+  "name": "Yukti Rail - Integrated Block Planning",
+  "description": "AI-Powered Integrated Block Planning for Indian Railways prototype dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
