@@ -27,6 +27,13 @@
     <!-- Pure Vanilla CSS stylesheet -->
     <link rel="stylesheet" href="./style.css" />
 
+    <!-- Leaflet.js Map Styles & Framework (Free OpenStreetMap) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Turf.js for Map Math & Polyline Interpolation -->
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
     <!-- Safe early global stubs and error boundary for sandboxed iframe compatibility -->
     <script>
       (function() {
@@ -639,39 +646,30 @@
                       <span style="display: inline-block; width: 10px; height: 10px; background: #001f3f; border-radius: 3px;"></span> Station
                     </span>
                   </div>
-                  <div id="map-api-status-badge" style="font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 12px; background: var(--color-green-light); color: var(--color-green); border: 1px solid var(--color-green-border); white-space: nowrap;">
-                    ● Google Maps API Ready
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div id="map-api-status-badge" style="font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 12px; background: var(--color-green-light); color: var(--color-green); border: 1px solid var(--color-green-border); white-space: nowrap; cursor: pointer;" title="Leaflet + OpenStreetMap engine active">
+                      ● OpenStreetMap Live (Leaflet)
+                    </div>
+                    <button id="btn-toggle-fullscreen" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px;" title="Toggle Fullscreen Map View">
+                      <i class="fa-solid fa-expand"></i> Fullscreen
+                    </button>
+                    <button id="btn-map-layer-settings" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px;" title="Configure Map Layers & Basemap">
+                      <i class="fa-solid fa-layer-group"></i> Layers
+                    </button>
                   </div>
                 </div>
 
-                <!-- Google Maps Canvas Element (CF2: Must have explicit height) -->
-                <div id="corridor-map-canvas" style="height: 560px; min-height: 480px; width: 100%; position: relative; background: #e5e7eb;">
-                  <!-- Interactive fallback canvas inside if API key is not present -->
-                  <div id="corridor-map-fallback" style="display: none; height: 100%; width: 100%; position: absolute; inset: 0; background: #0b192e; z-index: 2; flex-direction: column; justify-content: center; align-items: center; padding: 20px;">
-                    <canvas id="fallback-corridor-canvas" style="width: 100%; height: 100%; position: absolute; inset: 0;"></canvas>
-                    <div id="fallback-key-banner" style="position: absolute; bottom: 16px; left: 16px; right: 16px; background: rgba(0, 31, 63, 0.92); backdrop-filter: blur(8px); border: 1px solid var(--color-cyan-border); border-radius: var(--radius-md); padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; color: white; z-index: 10;">
-                      <div style="display: flex; align-items: center; gap: 12px;">
-                        <i class="fa-solid fa-map-location-dot" style="font-size: 20px; color: var(--color-cyan);"></i>
-                        <div>
-                          <div style="font-weight: 700; font-size: 13px;">Prototyping Mode: Interactive Rail Vector Engine Active</div>
-                          <div style="font-size: 11.5px; opacity: 0.85;">Add <code style="background: rgba(255,255,255,0.2); padding: 1px 4px; border-radius: 3px;">VITE_GOOGLE_MAPS_API_KEY</code> to enable native satellite/terrain layers.</div>
-                        </div>
-                      </div>
-                      <a href="https://mapsplatform.google.com/maps-demo-key?utm_campaign=gmp_mcp_codeassist_v1_aistudio" target="_blank" rel="noopener noreferrer" class="btn-primary" style="font-size: 12px; padding: 6px 14px; text-decoration: none; white-space: nowrap;">
-                        Get Free Demo Key <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                      </a>
-                    </div>
-                  </div>
-                </div>
+                <!-- Leaflet.js Map Viewport Container with OpenStreetMap Tiles (CF2: Explicit height) -->
+                <div id="map" class="corridor-map-canvas" style="height: 560px; min-height: 480px; width: 100%; position: relative; background: #e5e7eb; z-index: 1;"></div>
 
                 <!-- Live Map Bottom Floating Bar -->
-                <div style="padding: 8px 16px; background: var(--color-sidebar-bg); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--color-text-muted); flex-wrap: wrap; gap: 8px;">
+                <div style="padding: 8px 16px; background: var(--color-sidebar-bg); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--color-text-muted); flex-wrap: wrap; gap: 8px; z-index: 2;">
                   <div>
-                    <i class="fa-solid fa-compass"></i> Anchor: <span id="map-center-coords" class="font-mono" style="font-weight: 600; color: var(--color-navy);">19.2437° N, 73.1355° E (Kalyan Jn)</span>
+                    <i class="fa-solid fa-compass"></i> Center: <span id="map-center-coords" class="font-mono" style="font-weight: 600; color: var(--color-navy);">19.2437° N, 73.1355° E (Kalyan Jn)</span>
                   </div>
                   <div style="display: flex; gap: 16px;">
-                    <span>Projection: <strong>WGS84 Spherical</strong></span>
-                    <span>Geometry Engine: <strong style="color: var(--color-railway-blue);">google.maps.geometry.spherical</strong></span>
+                    <span>Projection: <strong>EPSG:3857 (Web Mercator)</strong></span>
+                    <span>Geometry Engine: <strong style="color: var(--color-railway-blue);">Turf.js + Leaflet.js</strong></span>
                   </div>
                 </div>
               </div>
@@ -758,30 +756,30 @@
                   <i class="fa-solid fa-square-root-variable"></i>
                 </div>
                 <div>
-                  <h3 style="font-size: 14px; font-weight: 700; color: var(--color-navy); margin: 0;">Google Maps Platform 'geometry' Library Integration</h3>
-                  <span style="font-size: 12px; color: var(--color-text-muted);">Spatial computations for Railway Corridor Safety &amp; Integrated Block Scheduling</span>
+                  <h3 style="font-size: 14px; font-weight: 700; color: var(--color-navy); margin: 0;">Leaflet.js + Turf.js Open Geospatial Engine</h3>
+                  <span style="font-size: 12px; color: var(--color-text-muted);">Real-time spherical calculations for Railway Corridor Safety &amp; Train Animation without external billing</span>
                 </div>
               </div>
 
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; font-size: 12.5px;">
                 <div style="padding: 10px 12px; background: var(--color-sidebar-hover); border-radius: var(--radius-sm); border-left: 3px solid var(--color-railway-blue);">
-                  <strong style="color: var(--color-navy);">1. google.maps.geometry.spherical.computeLength()</strong>
+                  <strong style="color: var(--color-navy);">1. turf.lineString() &amp; turf.length()</strong>
                   <p style="color: var(--color-text-muted); margin-top: 4px;">
-                    Traverses the multi-coordinate track vector polyline to compute exact geodesic track mileage (in meters/kilometers) for each railway division.
+                    Traverses corridor coordinates to build GeoJSON vector paths and calculate exact geodesic track distance (km) for each railway division.
                   </p>
                 </div>
 
                 <div style="padding: 10px 12px; background: var(--color-sidebar-hover); border-radius: var(--radius-sm); border-left: 3px solid var(--color-cyan);">
-                  <strong style="color: var(--color-navy);">2. google.maps.geometry.spherical.computeDistanceBetween()</strong>
+                  <strong style="color: var(--color-navy);">2. turf.distance()</strong>
                   <p style="color: var(--color-text-muted); margin-top: 4px;">
-                    Calculates high-precision separation between train coordinates and maintenance block boundaries to trigger cautionary speed alerts.
+                    Calculates high-precision separation between train coordinates and maintenance block boundaries to trigger cautionary speed alerts and restrictive signals.
                   </p>
                 </div>
 
                 <div style="padding: 10px 12px; background: var(--color-sidebar-hover); border-radius: var(--radius-sm); border-left: 3px solid var(--color-green);">
-                  <strong style="color: var(--color-navy);">3. google.maps.geometry.spherical.computeHeading() &amp; interpolate()</strong>
+                  <strong style="color: var(--color-navy);">3. turf.along() &amp; turf.bearing()</strong>
                   <p style="color: var(--color-text-muted); margin-top: 4px;">
-                    Determines exact train track orientation (bearing 0°–360°) to orient custom train glyphs, while interpolating motion along curved curves and ghats.
+                    Interpolates exact coordinate progression along track segments based on elapsed time fraction and computes bearing angle to dynamically orient trains.
                   </p>
                 </div>
               </div>
@@ -1440,6 +1438,73 @@
           <button class="btn-secondary btn-close-modal">Cancel</button>
           <button class="btn-primary" id="btn-run-simulation">
             <i class="fa-solid fa-play"></i> Run Simulation
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Leaflet & OpenStreetMap Layer Configuration Modal -->
+    <div class="modal-overlay" id="modal-map-settings" role="dialog" aria-modal="true" aria-labelledby="modal-map-settings-title" style="display: none;">
+      <div class="modal-box" style="max-width: 520px;">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-map-settings-title">
+            <i class="fa-solid fa-layer-group" style="color: var(--color-railway-blue);"></i>
+            Corridor Map Basemap &amp; Layers
+          </h3>
+          <button class="btn-icon btn-close-modal" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <!-- Active Engine Summary -->
+          <div style="padding: 12px 16px; border-radius: var(--radius-sm); background: var(--color-sidebar-bg); border: 1px solid var(--border); margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <span style="font-weight: 700; font-size: 13.5px; color: var(--color-navy);">Active Map Engine:</span>
+              <span id="modal-active-engine-badge" style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: var(--color-green-light); color: var(--color-green); border: 1px solid var(--color-green-border);">
+                Leaflet.js + OpenStreetMap
+              </span>
+            </div>
+            <p style="font-size: 12px; color: var(--color-text-muted); line-height: 1.5; margin: 0;">
+              High-performance interactive GIS map using OpenStreetMap vector tiles, styled railway polylines, and real-time Turf.js motion interpolation. Free, open, and no cloud billing required.
+            </p>
+          </div>
+
+          <!-- Basemap Selector Form -->
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label" for="select-basemap-layer" style="font-size: 12.5px; font-weight: 700; color: var(--color-navy);">
+              <i class="fa-solid fa-map"></i> Basemap Tile Provider
+            </label>
+            <select id="select-basemap-layer" class="form-control" style="font-size: 13px; padding: 8px 10px;">
+              <option value="osm" selected>OpenStreetMap Standard (Default)</option>
+              <option value="carto-positron">CartoDB Positron (Clean Light)</option>
+              <option value="carto-dark">CartoDB Dark Matter (Night Operations)</option>
+              <option value="opentopo">OpenTopoMap (Topographic Relief)</option>
+            </select>
+          </div>
+
+          <!-- Quick Display Layer Toggles -->
+          <div style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 8px;">
+            <i class="fa-solid fa-sliders"></i> Active Map Overlays
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; background: var(--color-sidebar-hover); padding: 12px; border-radius: var(--radius-sm);">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="modal-toggle-blocks" checked style="accent-color: var(--color-railway-blue);">
+              <span>Show Active Maintenance Block Zones (Red Dashed Segments)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="modal-toggle-stations" checked style="accent-color: var(--color-railway-blue);">
+              <span>Show Railway Stations &amp; Junction Pins</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="modal-toggle-trains" checked style="accent-color: var(--color-railway-blue);">
+              <span>Show Live Moving Train Markers</span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 8px;">
+          <button class="btn-secondary" id="btn-reset-map-view">
+            <i class="fa-solid fa-crosshairs"></i> Reset Corridor View
+          </button>
+          <button class="btn-primary btn-close-modal">
+            Apply &amp; Close
           </button>
         </div>
       </div>

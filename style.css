@@ -2881,12 +2881,46 @@ body.dark-theme .sidebar-status-line {
   transition: border-color var(--transition);
 }
 
+#map,
 #corridor-map-canvas {
   position: relative;
   overflow: hidden;
   height: 560px;
   min-height: 480px;
   width: 100%;
+}
+
+/* Fullscreen support for Leaflet Map */
+#map.leaflet-fullscreen-active,
+#corridor-map-wrapper.fullscreen-mode {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 99999 !important;
+  border-radius: 0 !important;
+}
+
+#corridor-map-wrapper.fullscreen-mode #map {
+  height: calc(100vh - 50px) !important;
+}
+
+/* Leaflet Custom DivIcon Clean Styling */
+.leaflet-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--color-sidebar-bg, #0f172a);
+  color: var(--color-navy, #0f172a);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  font-family: inherit;
+}
+
+.leaflet-container {
+  font-family: inherit;
 }
 
 /* Advanced Marker Styles */

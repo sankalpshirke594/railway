@@ -1,6 +1,6 @@
 // ==========================================
 // YUKTI RAIL - LIVE CORRIDOR TRACKING MODULE
-// Integrates Google Maps Platform & Geometry Library
+// High-Performance Leaflet.js + OpenStreetMap & Turf.js
 // ==========================================
 
 export const CORRIDORS_DATA = {
@@ -277,92 +277,163 @@ export const INITIAL_TRAINS = [
   }
 ];
 
-// Mathematical Geodesic Fallback Engine (Great Circle Math)
-// Provides identical behavior to google.maps.geometry.spherical if API key is not supplied
-export const GeometryMath = {
-  toRad: (deg) => (deg * Math.PI) / 180,
-  toDeg: (rad) => (rad * 180) / Math.PI,
-  EARTH_RADIUS: 6378137, // WGS84 standard earth radius in meters
+// ==========================================
+// TURF.JS HELPER WRAPPER WITH SAFE FALLBACK
+// Ensures Turf methods always execute reliably
+// ==========================================
+function toRad(deg) {
+  return (deg * Math.PI) / 180;
+}
+function toDeg(rad) {
+  return (rad * 180) / Math.PI;
+}
 
-  // Calculates distance in meters between two lat/lng coords
-  computeDistanceBetween: (p1, p2) => {
-    const lat1 = GeometryMath.toRad(p1.lat || p1.lat());
-    const lat2 = GeometryMath.toRad(p2.lat || p2.lat());
-    const dLat = lat2 - lat1;
-    const dLng = GeometryMath.toRad((p2.lng || p2.lng()) - (p1.lng || p1.lng()));
+function safeDistanceKm(c1, c2) {
+  const [lng1, lat1] = c1;
+  const [lng2, lat2] = c2;
+  const R = 6371; // Earth radius in km
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return GeometryMath.EARTH_RADIUS * c;
-  },
+function safeBearingDeg(c1, c2) {
+  const [lng1, lat1] = c1;
+  const [lng2, lat2] = c2;
+  const φ1 = toRad(lat1);
+  const φ2 = toRad(lat2);
+  const Δλ = toRad(lng2 - lng1);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  const θ = Math.atan2(y, x);
+  return (toDeg(θ) + 360) % 360;
+}
 
-  // Calculates total length of a polyline in meters
-  computeLength: (path) => {
-    if (!path || path.length < 2) return 0;
-    let total = 0;
-    for (let i = 0; i < path.length - 1; i++) {
-      total += GeometryMath.computeDistanceBetween(path[i], path[i + 1]);
+function safeInterpolate(c1, c2, fraction) {
+  const [lng1, lat1] = c1;
+  const [lng2, lat2] = c2;
+  const d = safeDistanceKm(c1, c2) / 6371;
+  if (d < 1e-7) return [lng1, lat1];
+
+  const A = Math.sin((1 - fraction) * d) / Math.sin(d);
+  const B = Math.sin(fraction * d) / Math.sin(d);
+
+  const φ1 = toRad(lat1);
+  const λ1 = toRad(lng1);
+  const φ2 = toRad(lat2);
+  const λ2 = toRad(lng2);
+
+  const x = A * Math.cos(φ1) * Math.cos(λ1) + B * Math.cos(φ2) * Math.cos(λ2);
+  const y = A * Math.cos(φ1) * Math.sin(λ1) + B * Math.cos(φ2) * Math.sin(λ2);
+  const z = A * Math.sin(φ1) + B * Math.sin(φ2);
+
+  const lat = Math.atan2(z, Math.sqrt(x * x + y * y));
+  const lng = Math.atan2(y, x);
+  return [toDeg(lng), toDeg(lat)];
+}
+
+const TurfEngine = {
+  getTurf() {
+    if (typeof window !== "undefined" && window.turf) {
+      return window.turf;
     }
-    return total;
+    return null;
   },
 
-  // Calculates initial forward heading/bearing from p1 to p2 in degrees (0 - 360)
-  computeHeading: (p1, p2) => {
-    const lat1 = GeometryMath.toRad(p1.lat || p1.lat());
-    const lat2 = GeometryMath.toRad(p2.lat || p2.lat());
-    const dLng = GeometryMath.toRad((p2.lng || p2.lng()) - (p1.lng || p1.lng()));
-
-    const y = Math.sin(dLng) * Math.cos(lat2);
-    const x =
-      Math.cos(lat1) * Math.sin(lat2) -
-      Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-    let brng = GeometryMath.toDeg(Math.atan2(y, x));
-    return (brng + 360) % 360;
+  lineString(coords) {
+    const t = this.getTurf();
+    if (t && t.lineString) {
+      return t.lineString(coords);
+    }
+    return { type: "Feature", geometry: { type: "LineString", coordinates: coords } };
   },
 
-  // Spherical interpolation between two points given fraction 0..1
-  interpolate: (p1, p2, fraction) => {
-    const lat1 = GeometryMath.toRad(p1.lat || p1.lat());
-    const lng1 = GeometryMath.toRad(p1.lng || p1.lng());
-    const lat2 = GeometryMath.toRad(p2.lat || p2.lat());
-    const lng2 = GeometryMath.toRad(p2.lng || p2.lng());
+  length(line, options = { units: "kilometers" }) {
+    const t = this.getTurf();
+    if (t && t.length) {
+      return t.length(line, options);
+    }
+    const coords = line.geometry ? line.geometry.coordinates : line;
+    let sum = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+      sum += safeDistanceKm(coords[i], coords[i + 1]);
+    }
+    return sum;
+  },
 
-    const d = GeometryMath.computeDistanceBetween(p1, p2) / GeometryMath.EARTH_RADIUS;
-    if (d < 1e-7) return { lat: p1.lat || p1.lat(), lng: p1.lng || p1.lng() };
+  along(line, distance, options = { units: "kilometers" }) {
+    const t = this.getTurf();
+    if (t && t.along) {
+      return t.along(line, distance, options);
+    }
+    const coords = line.geometry ? line.geometry.coordinates : line;
+    if (!coords || coords.length === 0) {
+      return { type: "Feature", geometry: { type: "Point", coordinates: [73.1355, 19.2437] } };
+    }
+    if (coords.length === 1 || distance <= 0) {
+      return { type: "Feature", geometry: { type: "Point", coordinates: coords[0] } };
+    }
 
-    const A = Math.sin((1 - fraction) * d) / Math.sin(d);
-    const B = Math.sin(fraction * d) / Math.sin(d);
+    let travelled = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const segDist = safeDistanceKm(coords[i], coords[i + 1]);
+      if (travelled + segDist >= distance) {
+        const segFraction = segDist > 0 ? (distance - travelled) / segDist : 0;
+        const pt = safeInterpolate(coords[i], coords[i + 1], segFraction);
+        return { type: "Feature", geometry: { type: "Point", coordinates: pt } };
+      }
+      travelled += segDist;
+    }
+    return { type: "Feature", geometry: { type: "Point", coordinates: coords[coords.length - 1] } };
+  },
 
-    const x = A * Math.cos(lat1) * Math.cos(lng1) + B * Math.cos(lat2) * Math.cos(lng2);
-    const y = A * Math.cos(lat1) * Math.sin(lng1) + B * Math.cos(lat2) * Math.sin(lng2);
-    const z = A * Math.sin(lat1) + B * Math.sin(lat2);
+  bearing(pointA, pointB) {
+    const t = this.getTurf();
+    if (t && t.bearing) {
+      const b = t.bearing(pointA, pointB);
+      return (b + 360) % 360;
+    }
+    const c1 = pointA.geometry ? pointA.geometry.coordinates : pointA;
+    const c2 = pointB.geometry ? pointB.geometry.coordinates : pointB;
+    return safeBearingDeg(c1, c2);
+  },
 
-    const lat = Math.atan2(z, Math.sqrt(x * x + y * y));
-    const lng = Math.atan2(y, x);
+  distance(pointA, pointB, options = { units: "kilometers" }) {
+    const t = this.getTurf();
+    if (t && t.distance) {
+      return t.distance(pointA, pointB, options);
+    }
+    const c1 = pointA.geometry ? pointA.geometry.coordinates : pointA;
+    const c2 = pointB.geometry ? pointB.geometry.coordinates : pointB;
+    return safeDistanceKm(c1, c2);
+  },
 
-    return {
-      lat: GeometryMath.toDeg(lat),
-      lng: GeometryMath.toDeg(lng)
-    };
+  point(coords) {
+    const t = this.getTurf();
+    if (t && t.point) {
+      return t.point(coords);
+    }
+    return { type: "Feature", geometry: { type: "Point", coordinates: coords } };
   }
 };
 
 // ==========================================
-// CORRIDOR CONTROLLER & SIMULATOR CLASS
+// CORRIDOR CONTROLLER & SIMULATOR CLASS (LEAFLET)
 // ==========================================
-class CorridorTrackingEngine {
+export class CorridorTrackingEngine {
   constructor() {
     this.map = null;
-    this.googleMaps = null;
-    this.geometrySpherical = null;
-    this.isNativeMaps = false;
+    this.tileLayer = null;
 
     this.selectedCorridor = "ALL";
     this.selectedTrainType = "ALL";
     this.showBlocks = true;
     this.showStations = true;
+    this.showTrains = true;
 
     this.simSpeed = 1;
     this.simRunning = true;
@@ -371,126 +442,143 @@ class CorridorTrackingEngine {
     this.trains = JSON.parse(JSON.stringify(INITIAL_TRAINS));
     this.selectedTrainId = "T101";
 
-    // Google Maps Markers & Overlays
-    this.markers = {
-      trains: new Map(),
+    // Leaflet Layers & Markers
+    this.layers = {
+      polylines: [],
       stations: [],
       blocks: [],
-      polylines: []
+      trains: new Map() // trainId -> { marker, el, lastLat, lastLng, heading }
     };
 
-    // Canvas fallback rendering state
-    this.canvas = null;
-    this.ctx = null;
-    this.canvasCenter = { lat: 19.2437, lng: 73.1355 };
-    this.canvasZoom = 9.5;
+    this.basemapProviders = {
+      osm: {
+        url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
+        maxZoom: 19
+      },
+      "carto-positron": {
+        url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        maxZoom: 20
+      },
+      "carto-dark": {
+        url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        maxZoom: 20
+      },
+      opentopo: {
+        url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+        attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
+        maxZoom: 17
+      }
+    };
   }
 
   async initialize() {
+    window.__corridorTrackingEngine = this;
+
+    // Wait if Leaflet script is still loading
+    if (typeof window.L === "undefined") {
+      await this.waitForLeaflet();
+    }
+
+    this.initMap();
     this.bindUIEvents();
     this.renderFleetList();
     this.updateInspector(this.selectedTrainId);
     this.updateGeometryMetrics();
-
-    // Check for Google Maps API Key
-    const apiKey =
-      (typeof import.meta !== "undefined" &&
-        import.meta.env &&
-        import.meta.env.VITE_GOOGLE_MAPS_API_KEY) ||
-      window.VITE_GOOGLE_MAPS_API_KEY ||
-      "";
-
-    const canvasContainer = document.getElementById("corridor-map-canvas");
-    if (!canvasContainer) return;
-
-    if (apiKey && apiKey.trim().length > 5) {
-      try {
-        await this.loadGoogleMaps(apiKey.trim());
-        return;
-      } catch (err) {
-        console.warn("Google Maps load attempt error, activating vector canvas:", err);
-      }
-    }
-
-    // Fallback to Interactive Rail Vector Canvas with full telemetry & geometry math
-    this.initVectorFallback();
     this.startSimulationLoop();
   }
 
-  async loadGoogleMaps(apiKey) {
-    const statusBadge = document.getElementById("map-api-status-badge");
-    if (statusBadge) {
-      statusBadge.textContent = "Connecting Google Maps API...";
-      statusBadge.style.color = "#0284c7";
-    }
-
-    // Modern Bootstrap Dynamic Loading Pattern with attribution id
-    await new Promise((resolve, reject) => {
-      if (window.google && window.google.maps && window.google.maps.importLibrary) {
-        return resolve();
-      }
-
-      const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
-        apiKey
-      )}&v=weekly&libraries=geometry,maps,marker&internal_usage_attribution_ids=gmp_mcp_codeassist_v1_aistudio`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => resolve();
-      script.onerror = (e) => reject(e);
-      document.head.appendChild(script);
-    });
-
-    this.googleMaps = window.google.maps;
-    const { Map } = await this.googleMaps.importLibrary("maps");
-    const { AdvancedMarkerElement } = await this.googleMaps.importLibrary("marker");
-    const { spherical } = await this.googleMaps.importLibrary("geometry");
-
-    this.geometrySpherical = spherical;
-    this.isNativeMaps = true;
-
-    if (statusBadge) {
-      statusBadge.textContent = "● Google Maps Active (DEMO_MAP_ID)";
-      statusBadge.style.color = "var(--color-green)";
-      statusBadge.style.background = "var(--color-green-light)";
-    }
-
-    const container = document.getElementById("corridor-map-canvas");
-    container.innerHTML = ""; // Clear fallback
-
-    // CF2 & CF9: Explicit height and mapId
-    this.map = new Map(container, {
-      center: { lat: 19.2437, lng: 73.1355 },
-      zoom: 10,
-      mapId: "DEMO_MAP_ID",
-      mapTypeId: "terrain",
-      streetViewControl: false,
-      fullscreenControl: true,
-      mapTypeControl: true,
-      zoomControl: true,
-      styles: [
-        {
-          featureType: "transit.line",
-          elementType: "geometry",
-          stylers: [{ color: "#1e3a8a" }, { weight: 3 }]
+  waitForLeaflet() {
+    return new Promise((resolve) => {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (typeof window.L !== "undefined" || attempts > 50) {
+          clearInterval(interval);
+          resolve();
         }
-      ]
+      }, 50);
     });
-
-    this.renderGoogleMapsPolylines();
-    this.renderGoogleMapsStations(AdvancedMarkerElement);
-    this.renderGoogleMapsBlocks(AdvancedMarkerElement);
-    this.renderGoogleMapsTrainMarkers(AdvancedMarkerElement);
-
-    this.startSimulationLoop();
   }
 
-  renderGoogleMapsPolylines() {
-    if (!this.map || !this.googleMaps) return;
+  initMap() {
+    const L = window.L;
+    if (!L) {
+      console.warn("Leaflet.js is not loaded yet.");
+      return;
+    }
+
+    // Ensure map container element exists
+    const container = document.getElementById("map") || document.getElementById("corridor-map-canvas");
+    if (!container) return;
+
+    // If an existing Leaflet instance is attached, remove it cleanly
+    if (this.map) {
+      try {
+        this.map.remove();
+      } catch (e) {
+        console.warn("Map remove notice:", e);
+      }
+      this.map = null;
+    }
+
+    // Replace new google.maps.Map(...) with Leaflet's L.map('map')
+    this.map = L.map(container.id || "map", {
+      center: [19.2437, 73.1355],
+      zoom: 10,
+      zoomControl: true,
+      attributionControl: true
+    });
+
+    // Set base tile layer to OpenStreetMap: https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
+    this.tileLayer = L.tileLayer(this.basemapProviders.osm.url, {
+      maxZoom: this.basemapProviders.osm.maxZoom,
+      attribution: this.basemapProviders.osm.attribution
+    }).addTo(this.map);
+
+    // Track center coordinate updates
+    this.map.on("move", () => {
+      this.updateCenterCoordinateText();
+    });
+
+    // Render Corridor track lines, stations, and blocks
+    this.renderPolylines();
+    this.renderStations();
+    this.renderBlocks();
+    this.renderTrainMarkers();
+
+    // Trigger size invalidation to guarantee proper tile render
+    setTimeout(() => {
+      if (this.map) this.map.invalidateSize();
+    }, 150);
+  }
+
+  setBasemap(providerKey) {
+    const L = window.L;
+    if (!this.map || !L) return;
+    const config = this.basemapProviders[providerKey] || this.basemapProviders.osm;
+
+    if (this.tileLayer) {
+      this.map.removeLayer(this.tileLayer);
+    }
+    this.tileLayer = L.tileLayer(config.url, {
+      maxZoom: config.maxZoom,
+      attribution: config.attribution
+    }).addTo(this.map);
+  }
+
+  // ==========================================
+  // RENDER TRACKS (L.polyline)
+  // ==========================================
+  renderPolylines() {
+    const L = window.L;
+    if (!this.map || !L) return;
 
     // Clear previous
-    this.markers.polylines.forEach((p) => p.setMap(null));
-    this.markers.polylines = [];
+    this.layers.polylines.forEach((p) => this.map.removeLayer(p));
+    this.layers.polylines = [];
 
     const corridorsToRender =
       this.selectedCorridor === "ALL"
@@ -498,35 +586,38 @@ class CorridorTrackingEngine {
         : [CORRIDORS_DATA[this.selectedCorridor]].filter(Boolean);
 
     corridorsToRender.forEach((corridor) => {
+      const latLngs = corridor.path.map((pt) => [pt.lat, pt.lng]);
+
       // Base Rail Track Polyline
-      const line = new this.googleMaps.Polyline({
-        path: corridor.path,
-        geodesic: true,
-        strokeColor: corridor.color,
-        strokeOpacity: 0.9,
-        strokeWeight: 5,
-        map: this.map
-      });
+      const baseTrack = L.polyline(latLngs, {
+        color: corridor.color,
+        weight: 6,
+        opacity: 0.9,
+        lineCap: "round",
+        lineJoin: "round"
+      }).addTo(this.map);
 
       // Railroad Ties Dashed Polyline
-      const tieLine = new this.googleMaps.Polyline({
-        path: corridor.path,
-        geodesic: true,
-        strokeColor: "#ffffff",
-        strokeOpacity: 0.6,
-        strokeWeight: 2,
-        strokePattern: [10, 8],
-        map: this.map
-      });
+      const tieTrack = L.polyline(latLngs, {
+        color: "#ffffff",
+        weight: 2,
+        opacity: 0.7,
+        dashArray: "6, 8"
+      }).addTo(this.map);
 
-      this.markers.polylines.push(line, tieLine);
+      this.layers.polylines.push(baseTrack, tieTrack);
     });
   }
 
-  renderGoogleMapsStations(AdvancedMarkerElement) {
-    if (!this.map) return;
-    this.markers.stations.forEach((m) => (m.map = null));
-    this.markers.stations = [];
+  // ==========================================
+  // RENDER STATIONS (L.marker with L.divIcon)
+  // ==========================================
+  renderStations() {
+    const L = window.L;
+    if (!this.map || !L) return;
+
+    this.layers.stations.forEach((m) => this.map.removeLayer(m));
+    this.layers.stations = [];
 
     if (!this.showStations) return;
 
@@ -537,34 +628,38 @@ class CorridorTrackingEngine {
 
     corridors.forEach((c) => {
       c.stations.forEach((st) => {
-        const pinEl = document.createElement("div");
-        pinEl.className = "rail-station-pin";
-        pinEl.innerHTML = `<i class="fa-solid fa-building-flag"></i> ${st.code} - ${st.name}`;
-
-        const marker = new AdvancedMarkerElement({
-          map: this.map,
-          position: st.pos,
-          title: `${st.name} (${st.code})`,
-          content: pinEl
+        const stationIcon = L.divIcon({
+          className: "leaflet-station-pin-wrap",
+          html: `<div class="rail-station-pin"><i class="fa-solid fa-building-flag"></i> ${st.code} - ${st.name}</div>`,
+          iconSize: [110, 22],
+          iconAnchor: [55, 11]
         });
 
-        marker.addListener("click", () => {
-          this.map.panTo(st.pos);
-          this.map.setZoom(12);
+        const marker = L.marker([st.pos.lat, st.pos.lng], { icon: stationIcon }).addTo(this.map);
+
+        marker.bindTooltip(
+          `<b>${st.name} (${st.code})</b><br>${st.major ? "Major Railway Junction" : "Intermediate Station"}`,
+          { direction: "top", offset: [0, -10] }
+        );
+
+        marker.on("click", () => {
+          this.map.setView([st.pos.lat, st.pos.lng], 13, { animate: true });
         });
 
-        this.markers.stations.push(marker);
+        this.layers.stations.push(marker);
       });
     });
   }
 
-  renderGoogleMapsBlocks(AdvancedMarkerElement) {
-    if (!this.map) return;
-    this.markers.blocks.forEach((m) => {
-      if (m.setMap) m.setMap(null);
-      if (m.map !== undefined) m.map = null;
-    });
-    this.markers.blocks = [];
+  // ==========================================
+  // RENDER ACTIVE MAINTENANCE BLOCKS (L.polyline & L.marker)
+  // ==========================================
+  renderBlocks() {
+    const L = window.L;
+    if (!this.map || !L) return;
+
+    this.layers.blocks.forEach((m) => this.map.removeLayer(m));
+    this.layers.blocks = [];
 
     if (!this.showBlocks) return;
 
@@ -574,176 +669,199 @@ class CorridorTrackingEngine {
         : ACTIVE_BLOCK_ZONES.filter((b) => b.corridorId === this.selectedCorridor);
 
     blocks.forEach((blk) => {
+      const blockLatLngs = blk.path.map((pt) => [pt.lat, pt.lng]);
+
       // Highlighted dashed line for block zone
-      const poly = new this.googleMaps.Polyline({
-        path: blk.path,
-        geodesic: true,
-        strokeColor: "#dc2626",
-        strokeOpacity: 0.95,
-        strokeWeight: 7,
-        map: this.map
-      });
+      const poly = L.polyline(blockLatLngs, {
+        color: "#dc2626",
+        weight: 7,
+        opacity: 0.95,
+        dashArray: "10, 6"
+      }).addTo(this.map);
 
       // Hazard Pin Marker at center
-      const hazardEl = document.createElement("div");
-      hazardEl.className = "rail-block-hazard-pin";
-      hazardEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${blk.reqId} (${blk.cautionSpeed})`;
-
-      const marker = new AdvancedMarkerElement({
-        map: this.map,
-        position: blk.center,
-        title: `${blk.title} - Caution Speed: ${blk.cautionSpeed}`,
-        content: hazardEl
+      const hazardIcon = L.divIcon({
+        className: "leaflet-hazard-pin-wrap",
+        html: `<div class="rail-block-hazard-pin"><i class="fa-solid fa-triangle-exclamation"></i> ${blk.reqId} (${blk.cautionSpeed})</div>`,
+        iconSize: [120, 24],
+        iconAnchor: [60, 12]
       });
 
-      marker.addListener("click", () => {
-        if (window.showToast) {
-          window.showToast(
-            `Block Zone ${blk.reqId}: ${blk.title}. Enforced speed limit: ${blk.cautionSpeed}. Dept: ${blk.department}.`,
-            "warning",
-            4000
-          );
-        }
-      });
+      const marker = L.marker([blk.center.lat, blk.center.lng], {
+        icon: hazardIcon,
+        zIndexOffset: 500
+      }).addTo(this.map);
 
-      this.markers.blocks.push(poly, marker);
+      marker.bindPopup(`
+        <div style="font-size: 12px; line-height: 1.4;">
+          <strong style="color: #dc2626; font-size: 13px;"><i class="fa-solid fa-triangle-exclamation"></i> Block Zone ${blk.reqId}</strong><br/>
+          <strong>${blk.title}</strong><br/>
+          Speed Restriction: <b>${blk.cautionSpeed}</b><br/>
+          Department: <b>${blk.department}</b><br/>
+          <div style="margin-top: 4px; color: #475569; font-size: 11px;">${blk.description}</div>
+        </div>
+      `);
+
+      this.layers.blocks.push(poly, marker);
     });
   }
 
-  renderGoogleMapsTrainMarkers(AdvancedMarkerElement) {
-    if (!this.map) return;
+  // ==========================================
+  // RENDER & UPDATE TRAIN MARKERS (L.marker)
+  // ==========================================
+  renderTrainMarkers() {
+    const L = window.L;
+    if (!this.map || !L) return;
 
-    // Filter trains
     const visibleTrains = this.getFilteredTrains();
 
+    if (!this.showTrains) {
+      for (const [id, wrap] of this.layers.trains.entries()) {
+        this.map.removeLayer(wrap.marker);
+      }
+      this.layers.trains.clear();
+      return;
+    }
+
     visibleTrains.forEach((train) => {
-      const pos = this.getTrainPosition(train);
-      const heading = this.getTrainHeading(train);
+      const { lat, lng, heading } = this.calculateTrainStateWithTurf(train);
 
-      let markerWrap = this.markers.trains.get(train.id);
-      if (!markerWrap) {
-        const el = document.createElement("div");
-        el.className = `rail-train-marker ${
-          train.id === this.selectedTrainId ? "selected" : ""
-        }`;
-        el.id = `train-marker-${train.id}`;
-        el.innerHTML = `
-          <div class="train-icon-wrap" style="transform: rotate(${Math.round(
-            heading
-          )}deg);">
-            <i class="fa-solid fa-train"></i>
-          </div>
-          <div style="display: flex; flex-direction: column; line-height: 1.1;">
-            <span>${train.number}</span>
-            <span style="font-size: 8.5px; opacity: 0.85;">${train.speed} km/h</span>
-          </div>
-        `;
+      let wrap = this.layers.trains.get(train.id);
+      if (!wrap) {
+        const trainIcon = L.divIcon({
+          className: "leaflet-train-marker-wrap",
+          html: `
+            <div class="rail-train-marker ${train.id === this.selectedTrainId ? "selected" : ""}" id="train-marker-${train.id}">
+              <div class="train-icon-wrap" style="transform: rotate(${Math.round(heading)}deg);">
+                <i class="fa-solid fa-train"></i>
+              </div>
+              <div style="display: flex; flex-direction: column; line-height: 1.1;">
+                <span>${train.number}</span>
+                <span class="train-speed-txt" style="font-size: 8.5px; opacity: 0.85;">${Math.round(train.speed)} km/h</span>
+              </div>
+            </div>
+          `,
+          iconSize: [110, 32],
+          iconAnchor: [55, 16]
+        });
 
-        el.addEventListener("click", () => {
+        const marker = L.marker([lat, lng], { icon: trainIcon, zIndexOffset: 1000 }).addTo(this.map);
+
+        marker.on("click", () => {
           this.selectTrain(train.id);
         });
 
-        const marker = new AdvancedMarkerElement({
-          map: this.map,
-          position: pos,
-          title: `${train.number} ${train.name}`,
-          content: el
+        this.layers.trains.set(train.id, {
+          marker,
+          heading,
+          lat,
+          lng
         });
-
-        this.markers.trains.set(train.id, { marker, el });
       } else {
-        markerWrap.marker.position = pos;
-        const iconWrap = markerWrap.el.querySelector(".train-icon-wrap");
-        if (iconWrap) {
-          iconWrap.style.transform = `rotate(${Math.round(heading)}deg)`;
-        }
-        if (train.id === this.selectedTrainId) {
-          markerWrap.el.classList.add("selected");
-        } else {
-          markerWrap.el.classList.remove("selected");
+        // Update position using .setLatLng()
+        wrap.marker.setLatLng([lat, lng]);
+        wrap.heading = heading;
+        wrap.lat = lat;
+        wrap.lng = lng;
+
+        const el = document.getElementById(`train-marker-${train.id}`);
+        if (el) {
+          const iconWrap = el.querySelector(".train-icon-wrap");
+          if (iconWrap) {
+            iconWrap.style.transform = `rotate(${Math.round(heading)}deg)`;
+          }
+          const speedTxt = el.querySelector(".train-speed-txt");
+          if (speedTxt) {
+            speedTxt.textContent = `${Math.round(train.speed)} km/h`;
+          }
+          if (train.id === this.selectedTrainId) {
+            el.classList.add("selected");
+          } else {
+            el.classList.remove("selected");
+          }
+          if (train.signal && (train.signal.includes("Restrictive") || train.signal.includes("Yellow"))) {
+            el.classList.add("status-caution");
+          } else {
+            el.classList.remove("status-caution");
+          }
         }
       }
     });
 
-    // Remove trains no longer visible
-    for (const [id, wrap] of this.markers.trains.entries()) {
+    // Remove any trains no longer visible under active filter
+    for (const [id, wrap] of this.layers.trains.entries()) {
       if (!visibleTrains.find((t) => t.id === id)) {
-        wrap.marker.map = null;
-        this.markers.trains.delete(id);
+        this.map.removeLayer(wrap.marker);
+        this.layers.trains.delete(id);
       }
     }
   }
 
   // ==========================================
-  // MATHEMATICAL GEOMETRY COMPILATION
-  // Uses google.maps.geometry.spherical if available, or GeometryMath fallback
+  // TURF.JS INTERPOLATION & MOTION LOGIC
+  // Strict Requirement: Use turf.lineString([stationA_coords, stationB_coords])
+  // and turf.along(line, distance) to calculate exact coordinates
   // ==========================================
-  computeLength(path) {
-    if (this.geometrySpherical && this.geometrySpherical.computeLength) {
-      return this.geometrySpherical.computeLength(path);
-    }
-    return GeometryMath.computeLength(path);
-  }
-
-  computeDistanceBetween(p1, p2) {
-    if (this.geometrySpherical && this.geometrySpherical.computeDistanceBetween) {
-      return this.geometrySpherical.computeDistanceBetween(p1, p2);
-    }
-    return GeometryMath.computeDistanceBetween(p1, p2);
-  }
-
-  computeHeading(p1, p2) {
-    if (this.geometrySpherical && this.geometrySpherical.computeHeading) {
-      return this.geometrySpherical.computeHeading(p1, p2);
-    }
-    return GeometryMath.computeHeading(p1, p2);
-  }
-
-  interpolate(p1, p2, fraction) {
-    if (this.geometrySpherical && this.geometrySpherical.interpolate) {
-      const pt = this.geometrySpherical.interpolate(p1, p2, fraction);
-      return { lat: pt.lat(), lng: pt.lng() };
-    }
-    return GeometryMath.interpolate(p1, p2, fraction);
-  }
-
-  getTrainPosition(train) {
+  calculateTrainStateWithTurf(train) {
     const corridor = CORRIDORS_DATA[train.corridorId];
     if (!corridor || !corridor.path || corridor.path.length < 2) {
-      return { lat: 19.2437, lng: 73.1355 };
+      return { lat: 19.2437, lng: 73.1355, heading: 0 };
     }
 
     const path = corridor.path;
     const numSegments = path.length - 1;
-    const progress = Math.max(0, Math.min(0.999, train.progress));
+    const progress = Math.max(0, Math.min(0.9999, train.progress));
     const segmentIndex = Math.min(Math.floor(progress * numSegments), numSegments - 1);
     const segmentFraction = progress * numSegments - segmentIndex;
 
     const p1 = path[segmentIndex];
     const p2 = path[segmentIndex + 1];
 
-    return this.interpolate(p1, p2, segmentFraction);
+    // Turf coordinates standard: [longitude, latitude]
+    const stationA_coords = [p1.lng, p1.lat];
+    const stationB_coords = [p2.lng, p2.lat];
+
+    // Build Turf LineString between the two track coordinates
+    const line = TurfEngine.lineString([stationA_coords, stationB_coords]);
+
+    // Calculate segment geodesic length in kilometers
+    const segmentLengthKm = TurfEngine.length(line, { units: "kilometers" });
+
+    // Distance along line based on elapsed time fraction
+    const distance = segmentFraction * segmentLengthKm;
+
+    // Calculate exact coordinate of the train
+    const currentPoint = TurfEngine.along(line, distance, { units: "kilometers" });
+    const [trainLng, trainLat] = currentPoint.geometry.coordinates;
+
+    // Calculate bearing angle to orient train glyph
+    const heading = TurfEngine.bearing(stationA_coords, stationB_coords);
+
+    return {
+      lat: trainLat,
+      lng: trainLng,
+      heading
+    };
+  }
+
+  getTrainPosition(train) {
+    const state = this.calculateTrainStateWithTurf(train);
+    return { lat: state.lat, lng: state.lng };
   }
 
   getTrainHeading(train) {
-    const corridor = CORRIDORS_DATA[train.corridorId];
-    if (!corridor || !corridor.path || corridor.path.length < 2) return 0;
-
-    const path = corridor.path;
-    const numSegments = path.length - 1;
-    const progress = Math.max(0, Math.min(0.999, train.progress));
-    const segmentIndex = Math.min(Math.floor(progress * numSegments), numSegments - 1);
-
-    const p1 = path[segmentIndex];
-    const p2 = path[segmentIndex + 1];
-
-    return this.computeHeading(p1, p2);
+    const state = this.calculateTrainStateWithTurf(train);
+    return state.heading;
   }
 
   // ==========================================
-  // REAL-TIME TRAIN SIMULATION
+  // REAL-TIME SIMULATION LOOP
   // ==========================================
   startSimulationLoop() {
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
+
     let lastTime = performance.now();
 
     const loop = (currentTime) => {
@@ -754,11 +872,7 @@ class CorridorTrackingEngine {
         this.stepSimulation(delta * this.simSpeed);
       }
 
-      if (!this.isNativeMaps) {
-        this.drawVectorCanvas();
-      } else {
-        this.updateNativeMarkers();
-      }
+      this.updateMovingMarkers();
 
       this.animationFrameId = requestAnimationFrame(loop);
     };
@@ -768,24 +882,26 @@ class CorridorTrackingEngine {
 
   stepSimulation(deltaSeconds) {
     this.trains.forEach((train) => {
-      // Check proximity to active blocks
-      const currentPos = this.getTrainPosition(train);
-      let minDistanceToBlock = Infinity;
+      const pos = this.getTrainPosition(train);
+      const trainPoint = TurfEngine.point([pos.lng, pos.lat]);
 
+      // Measure proximity to active maintenance blocks with Turf.js
+      let minDistanceKm = Infinity;
       ACTIVE_BLOCK_ZONES.forEach((blk) => {
         if (blk.corridorId === train.corridorId) {
-          const dist = this.computeDistanceBetween(currentPos, blk.center);
-          if (dist < minDistanceToBlock) {
-            minDistanceToBlock = dist;
+          const blkPoint = TurfEngine.point([blk.center.lng, blk.center.lat]);
+          const d = TurfEngine.distance(trainPoint, blkPoint, { units: "kilometers" });
+          if (d < minDistanceKm) {
+            minDistanceKm = d;
           }
         }
       });
 
       // Adjust speed dynamically when approaching block zone
-      if (minDistanceToBlock < 2500) {
+      if (minDistanceKm < 2.5) {
         train.speed = Math.max(25, train.speed - 0.4);
         train.signal = "Restrictive (Caution 30 km/h)";
-      } else if (minDistanceToBlock < 6000) {
+      } else if (minDistanceKm < 6.0) {
         train.signal = "Single Yellow (Caution Work Ahead)";
       } else {
         train.signal = "Double Green";
@@ -795,368 +911,69 @@ class CorridorTrackingEngine {
         else train.speed = Math.min(45, train.speed + 0.1);
       }
 
-      // Advance along polyline
+      // Advance along polyline based on elapsed time fraction
       train.progress += train.speedStep * (deltaSeconds * 2.5);
       if (train.progress >= 1) {
         train.progress = 0.02; // Loop back
       }
     });
 
-    // Refresh active inspector if selected
+    // Refresh telemetry inspector
     if (this.selectedTrainId) {
       this.updateInspector(this.selectedTrainId);
     }
   }
 
-  updateNativeMarkers() {
-    if (!this.isNativeMaps) return;
+  // Update moving train markers using Leaflet's .setLatLng()
+  updateMovingMarkers() {
+    if (!this.map || !this.showTrains) return;
 
     this.getFilteredTrains().forEach((train) => {
-      const wrap = this.markers.trains.get(train.id);
-      if (wrap) {
-        const pos = this.getTrainPosition(train);
-        const heading = this.getTrainHeading(train);
-        wrap.marker.position = pos;
+      const { lat, lng, heading } = this.calculateTrainStateWithTurf(train);
+      const wrap = this.layers.trains.get(train.id);
 
-        const iconWrap = wrap.el.querySelector(".train-icon-wrap");
-        if (iconWrap) {
-          iconWrap.style.transform = `rotate(${Math.round(heading)}deg)`;
-        }
+      if (wrap && wrap.marker) {
+        // Update marker position using .setLatLng()
+        wrap.marker.setLatLng([lat, lng]);
+        wrap.heading = heading;
 
-        const speedText = wrap.el.querySelector("span:last-child");
-        if (speedText) {
-          speedText.textContent = `${Math.round(train.speed)} km/h`;
+        const el = document.getElementById(`train-marker-${train.id}`);
+        if (el) {
+          const iconWrap = el.querySelector(".train-icon-wrap");
+          if (iconWrap) {
+            iconWrap.style.transform = `rotate(${Math.round(heading)}deg)`;
+          }
+          const speedTxt = el.querySelector(".train-speed-txt");
+          if (speedTxt) {
+            speedTxt.textContent = `${Math.round(train.speed)} km/h`;
+          }
+          if (train.signal && (train.signal.includes("Restrictive") || train.signal.includes("Yellow"))) {
+            el.classList.add("status-caution");
+          } else {
+            el.classList.remove("status-caution");
+          }
         }
-
-        if (train.signal.includes("Restrictive") || train.signal.includes("Yellow")) {
-          wrap.el.classList.add("status-caution");
-        } else {
-          wrap.el.classList.remove("status-caution");
-        }
+      } else {
+        this.renderTrainMarkers();
       }
-    });
-  }
-
-  // ==========================================
-  // HIGH-FIDELITY VECTOR CANVAS ENGINE (FAILSAFE)
-  // Renders vector railway network, stations, and trains seamlessly
-  // ==========================================
-  initVectorFallback() {
-    const fallbackBox = document.getElementById("corridor-map-fallback");
-    if (fallbackBox) {
-      fallbackBox.style.display = "flex";
-    }
-
-    this.canvas = document.getElementById("fallback-corridor-canvas");
-    if (!this.canvas) return;
-    this.ctx = this.canvas.getContext("2d");
-
-    const resizeCanvas = () => {
-      const rect = this.canvas.parentElement.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      this.canvas.width = rect.width * dpr;
-      this.canvas.height = rect.height * dpr;
-      this.ctx.scale(dpr, dpr);
-    };
-
-    window.addEventListener("resize", resizeCanvas);
-    resizeCanvas();
-
-    // Enable Pan and Zoom interactions on the vector canvas
-    let isDragging = false;
-    let lastX = 0;
-    let lastY = 0;
-
-    this.canvas.addEventListener("mousedown", (e) => {
-      isDragging = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
-    });
-
-    window.addEventListener("mousemove", (e) => {
-      if (!isDragging) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-
-      const scale = Math.pow(2, this.canvasZoom) * 256;
-      const dLng = (-dx / scale) * 360;
-      const dLat = (dy / scale) * 180;
-
-      this.canvasCenter.lng += dLng;
-      this.canvasCenter.lat += dLat;
-      this.updateCenterCoordinateText();
-    });
-
-    window.addEventListener("mouseup", () => {
-      isDragging = false;
-    });
-
-    this.canvas.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      const zoomFactor = e.deltaY < 0 ? 0.2 : -0.2;
-      this.canvasZoom = Math.max(7.5, Math.min(14, this.canvasZoom + zoomFactor));
-    });
-
-    // Train Selection on Click
-    this.canvas.addEventListener("click", (e) => {
-      const rect = this.canvas.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const clickY = e.clientY - rect.top;
-
-      const visibleTrains = this.getFilteredTrains();
-      for (const t of visibleTrains) {
-        const pos = this.getTrainPosition(t);
-        const pt = this.projectLatLng(pos.lat, pos.lng);
-        const dist = Math.hypot(clickX - pt.x, clickY - pt.y);
-        if (dist < 22) {
-          this.selectTrain(t.id);
-          return;
-        }
-      }
-    });
-
-    this.updateCenterCoordinateText();
-  }
-
-  projectLatLng(lat, lng) {
-    if (!this.canvas) return { x: 0, y: 0 };
-    const rect = this.canvas.getBoundingClientRect();
-    const width = rect.width;
-    const height = rect.height;
-
-    // Web Mercator Forward Projection centered at this.canvasCenter
-    const zoom = this.canvasZoom;
-    const scale = (256 * Math.pow(2, zoom)) / (2 * Math.PI);
-
-    const centerLatRad = GeometryMath.toRad(this.canvasCenter.lat);
-    const centerLngRad = GeometryMath.toRad(this.canvasCenter.lng);
-    const centerWorldX = scale * (centerLngRad + Math.PI);
-    const centerWorldY =
-      scale * (Math.PI - Math.log(Math.tan(Math.PI / 4 + centerLatRad / 2)));
-
-    const latRad = GeometryMath.toRad(lat);
-    const lngRad = GeometryMath.toRad(lng);
-    const worldX = scale * (lngRad + Math.PI);
-    const worldY = scale * (Math.PI - Math.log(Math.tan(Math.PI / 4 + latRad / 2)));
-
-    return {
-      x: width / 2 + (worldX - centerWorldX),
-      y: height / 2 + (worldY - centerWorldY)
-    };
-  }
-
-  drawVectorCanvas() {
-    if (!this.ctx || !this.canvas) return;
-    const rect = this.canvas.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height;
-
-    // Dark Railway Operations Canvas Background
-    this.ctx.fillStyle = "#0a1322";
-    this.ctx.fillRect(0, 0, w, h);
-
-    // Geographic Grid Lines
-    this.ctx.strokeStyle = "rgba(56, 189, 248, 0.08)";
-    this.ctx.lineWidth = 1;
-    const gridStep = 60;
-    for (let x = 0; x < w; x += gridStep) {
-      this.ctx.beginPath();
-      this.ctx.moveTo(x, 0);
-      this.ctx.lineTo(x, h);
-      this.ctx.stroke();
-    }
-    for (let y = 0; y < h; y += gridStep) {
-      this.ctx.beginPath();
-      this.ctx.moveTo(0, y);
-      this.ctx.lineTo(w, y);
-      this.ctx.stroke();
-    }
-
-    // Topography Accents / Water Bodies (Arabian Sea & Ulhas River)
-    this.ctx.fillStyle = "#071c35";
-    this.ctx.beginPath();
-    const seaPt = this.projectLatLng(18.9, 72.78);
-    this.ctx.arc(seaPt.x, seaPt.y, 160, 0, Math.PI * 2);
-    this.ctx.fill();
-
-    // 1. Draw Corridors Polyline Tracks
-    const corridors =
-      this.selectedCorridor === "ALL"
-        ? Object.values(CORRIDORS_DATA)
-        : [CORRIDORS_DATA[this.selectedCorridor]].filter(Boolean);
-
-    corridors.forEach((c) => {
-      if (!c.path || c.path.length < 2) return;
-
-      // Track Bed Outer Glow
-      this.ctx.strokeStyle = c.color + "33";
-      this.ctx.lineWidth = 9;
-      this.ctx.beginPath();
-      c.path.forEach((pt, i) => {
-        const p = this.projectLatLng(pt.lat, pt.lng);
-        if (i === 0) this.ctx.moveTo(p.x, p.y);
-        else this.ctx.lineTo(p.x, p.y);
-      });
-      this.ctx.stroke();
-
-      // Track Rails
-      this.ctx.strokeStyle = c.color;
-      this.ctx.lineWidth = 4;
-      this.ctx.beginPath();
-      c.path.forEach((pt, i) => {
-        const p = this.projectLatLng(pt.lat, pt.lng);
-        if (i === 0) this.ctx.moveTo(p.x, p.y);
-        else this.ctx.lineTo(p.x, p.y);
-      });
-      this.ctx.stroke();
-
-      // Railway Sleeper Ties Dashed Center
-      this.ctx.strokeStyle = "#ffffff";
-      this.ctx.lineWidth = 1.8;
-      this.ctx.setLineDash([6, 6]);
-      this.ctx.stroke();
-      this.ctx.setLineDash([]);
-    });
-
-    // 2. Draw Active Maintenance Block Overlays
-    if (this.showBlocks) {
-      const blocks =
-        this.selectedCorridor === "ALL"
-          ? ACTIVE_BLOCK_ZONES
-          : ACTIVE_BLOCK_ZONES.filter((b) => b.corridorId === this.selectedCorridor);
-
-      blocks.forEach((blk) => {
-        this.ctx.strokeStyle = "#ef4444";
-        this.ctx.lineWidth = 6;
-        this.ctx.setLineDash([8, 6]);
-        this.ctx.beginPath();
-        blk.path.forEach((pt, i) => {
-          const p = this.projectLatLng(pt.lat, pt.lng);
-          if (i === 0) this.ctx.moveTo(p.x, p.y);
-          else this.ctx.lineTo(p.x, p.y);
-        });
-        this.ctx.stroke();
-        this.ctx.setLineDash([]);
-
-        // Block Warning Pin
-        const centerPt = this.projectLatLng(blk.center.lat, blk.center.lng);
-        this.ctx.fillStyle = "rgba(220, 38, 38, 0.95)";
-        this.ctx.strokeStyle = "#fecaca";
-        this.ctx.lineWidth = 1.5;
-        this.ctx.beginPath();
-        this.ctx.roundRect(centerPt.x - 48, centerPt.y - 24, 96, 20, 4);
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        this.ctx.fillStyle = "#ffffff";
-        this.ctx.font = "bold 10px sans-serif";
-        this.ctx.textAlign = "center";
-        this.ctx.fillText(`⚠ ${blk.reqId} (30km/h)`, centerPt.x, centerPt.y - 10);
-      });
-    }
-
-    // 3. Draw Railway Stations
-    if (this.showStations) {
-      corridors.forEach((c) => {
-        c.stations.forEach((st) => {
-          const pt = this.projectLatLng(st.pos.lat, st.pos.lng);
-
-          // Station Node Circle
-          this.ctx.fillStyle = st.major ? "#38bdf8" : "#94a3b8";
-          this.ctx.beginPath();
-          this.ctx.arc(pt.x, pt.y, st.major ? 4.5 : 3, 0, Math.PI * 2);
-          this.ctx.fill();
-
-          // Station Label
-          this.ctx.fillStyle = st.major ? "#f8fafc" : "#94a3b8";
-          this.ctx.font = st.major ? "bold 10px sans-serif" : "9px sans-serif";
-          this.ctx.textAlign = "left";
-          this.ctx.fillText(st.code, pt.x + 7, pt.y + 3);
-        });
-      });
-    }
-
-    // 4. Draw Animated Trains
-    const visibleTrains = this.getFilteredTrains();
-    visibleTrains.forEach((t) => {
-      const pos = this.getTrainPosition(t);
-      const heading = this.getTrainHeading(t);
-      const pt = this.projectLatLng(pos.lat, pos.lng);
-      const isSelected = t.id === this.selectedTrainId;
-
-      this.ctx.save();
-      this.ctx.translate(pt.x, pt.y);
-
-      // Selected Train Halo
-      if (isSelected) {
-        this.ctx.strokeStyle = "#f59e0b";
-        this.ctx.lineWidth = 2.5;
-        this.ctx.beginPath();
-        this.ctx.arc(0, 0, 16, 0, Math.PI * 2);
-        this.ctx.stroke();
-      }
-
-      // Train Marker Pill
-      const pillWidth = 84;
-      const pillHeight = 22;
-      this.ctx.fillStyle = isSelected
-        ? "rgba(15, 23, 42, 0.96)"
-        : "rgba(15, 23, 42, 0.88)";
-      this.ctx.strokeStyle = isSelected ? "#f59e0b" : "#38bdf8";
-      this.ctx.lineWidth = 1.5;
-
-      this.ctx.beginPath();
-      this.ctx.roundRect(-pillWidth / 2, -pillHeight / 2, pillWidth, pillHeight, 11);
-      this.ctx.fill();
-      this.ctx.stroke();
-
-      // Heading Arrow Icon
-      this.ctx.save();
-      this.ctx.translate(-pillWidth / 2 + 12, 0);
-      this.ctx.rotate(GeometryMath.toRad(heading));
-      this.ctx.fillStyle = isSelected ? "#f59e0b" : "#38bdf8";
-      this.ctx.beginPath();
-      this.ctx.moveTo(0, -5);
-      this.ctx.lineTo(5, 5);
-      this.ctx.lineTo(-5, 5);
-      this.ctx.closePath();
-      this.ctx.fill();
-      this.ctx.restore();
-
-      // Train ID & Speed Text
-      this.ctx.fillStyle = "#ffffff";
-      this.ctx.font = "bold 9.5px monospace";
-      this.ctx.textAlign = "left";
-      this.ctx.fillText(t.number, -pillWidth / 2 + 22, -1);
-
-      this.ctx.fillStyle = "#38bdf8";
-      this.ctx.font = "8.5px sans-serif";
-      this.ctx.fillText(`${Math.round(t.speed)}km/h`, -pillWidth / 2 + 22, 8);
-
-      this.ctx.restore();
     });
   }
 
   updateCenterCoordinateText() {
     const coordsEl = document.getElementById("map-center-coords");
-    if (coordsEl) {
-      coordsEl.textContent = `${this.canvasCenter.lat.toFixed(
-        4
-      )}° N, ${this.canvasCenter.lng.toFixed(4)}° E`;
+    if (coordsEl && this.map) {
+      const c = this.map.getCenter();
+      coordsEl.textContent = `${c.lat.toFixed(4)}° N, ${c.lng.toFixed(4)}° E`;
     }
   }
 
   // ==========================================
-  // UI FILTER & INSPECTOR UPDATES
+  // UI FILTERS & INSPECTOR LOGIC
   // ==========================================
   getFilteredTrains() {
     return this.trains.filter((t) => {
-      const matchCorridor =
-        this.selectedCorridor === "ALL" || t.corridorId === this.selectedCorridor;
-      const matchType =
-        this.selectedTrainType === "ALL" || t.type === this.selectedTrainType;
+      const matchCorridor = this.selectedCorridor === "ALL" || t.corridorId === this.selectedCorridor;
+      const matchType = this.selectedTrainType === "ALL" || t.type === this.selectedTrainType;
       return matchCorridor && matchType;
     });
   }
@@ -1169,15 +986,16 @@ class CorridorTrackingEngine {
     this.updateInspector(trainId);
     this.renderFleetList();
 
+    // Focus train in Leaflet
     const pos = this.getTrainPosition(train);
-    if (this.isNativeMaps && this.map) {
-      this.map.panTo(pos);
-      this.map.setZoom(11);
-    } else {
-      this.canvasCenter = { ...pos };
-      this.canvasZoom = 10.5;
-      this.updateCenterCoordinateText();
+    if (this.map) {
+      this.map.panTo([pos.lat, pos.lng], { animate: true });
     }
+
+    // Highlight marker DOM
+    document.querySelectorAll(".rail-train-marker").forEach((el) => el.classList.remove("selected"));
+    const activeEl = document.getElementById(`train-marker-${trainId}`);
+    if (activeEl) activeEl.classList.add("selected");
   }
 
   updateInspector(trainId) {
@@ -1198,19 +1016,13 @@ class CorridorTrackingEngine {
     if (typeEl) {
       typeEl.textContent = train.type;
       typeEl.className = `badge ${
-        train.type === "EXPRESS"
-          ? "badge-medium"
-          : train.type === "SUBURBAN"
-          ? "badge-low"
-          : "badge-high"
+        train.type === "EXPRESS" ? "badge-medium" : train.type === "SUBURBAN" ? "badge-low" : "badge-high"
       }`;
     }
 
     const corridor = CORRIDORS_DATA[train.corridorId];
     if (sectionEl) {
-      sectionEl.textContent = `Section: ${corridor ? corridor.name : train.corridorId} (${
-        train.direction
-      } Line)`;
+      sectionEl.textContent = `Section: ${corridor ? corridor.name : train.corridorId} (${train.direction} Line)`;
     }
 
     if (speedEl) speedEl.textContent = `${Math.round(train.speed)} km/h`;
@@ -1228,46 +1040,51 @@ class CorridorTrackingEngine {
       headingEl.textContent = `${String(heading).padStart(3, "0")}° ${cardinal}`;
     }
 
-    // Geometry Distance to Nearest Station
+    // Distance to Nearest Station using Turf
     const pos = this.getTrainPosition(train);
+    const trainPt = TurfEngine.point([pos.lng, pos.lat]);
     let nearestSt = null;
-    let minStDist = Infinity;
+    let minStDistKm = Infinity;
     if (corridor && corridor.stations) {
       corridor.stations.forEach((st) => {
-        const d = this.computeDistanceBetween(pos, st.pos);
-        if (d < minStDist) {
-          minStDist = d;
+        const d = TurfEngine.distance(trainPt, TurfEngine.point([st.pos.lng, st.pos.lat]), {
+          units: "kilometers"
+        });
+        if (d < minStDistKm) {
+          minStDistKm = d;
           nearestSt = st;
         }
       });
     }
 
     if (nextEl && nearestSt) {
-      nextEl.textContent = `${nearestSt.name} (${(minStDist / 1000).toFixed(1)} km)`;
+      nextEl.textContent = `${nearestSt.name} (${minStDistKm.toFixed(1)} km)`;
     }
 
-    // Geometry Distance to Nearest Active Block Zone
+    // Distance to Nearest Active Block Zone using Turf
     let nearestBlk = null;
-    let minBlkDist = Infinity;
+    let minBlkDistKm = Infinity;
     ACTIVE_BLOCK_ZONES.forEach((blk) => {
       if (blk.corridorId === train.corridorId) {
-        const d = this.computeDistanceBetween(pos, blk.center);
-        if (d < minBlkDist) {
-          minBlkDist = d;
+        const d = TurfEngine.distance(trainPt, TurfEngine.point([blk.center.lng, blk.center.lat]), {
+          units: "kilometers"
+        });
+        if (d < minBlkDistKm) {
+          minBlkDistKm = d;
           nearestBlk = blk;
         }
       }
     });
 
     if (blockEl) {
-      if (minBlkDist < 3000) {
-        blockEl.textContent = `${(minBlkDist / 1000).toFixed(1)} km (Active Worksite)`;
+      if (minBlkDistKm < 3.0) {
+        blockEl.textContent = `${minBlkDistKm.toFixed(1)} km (Active Worksite)`;
         blockEl.style.color = "var(--color-red)";
-      } else if (minBlkDist < 8000) {
-        blockEl.textContent = `${(minBlkDist / 1000).toFixed(1)} km (Caution Ahead)`;
+      } else if (minBlkDistKm < 8.0) {
+        blockEl.textContent = `${minBlkDistKm.toFixed(1)} km (Caution Ahead)`;
         blockEl.style.color = "var(--color-amber)";
       } else {
-        blockEl.textContent = `${(minBlkDist / 1000).toFixed(1)} km (Clear Buffer)`;
+        blockEl.textContent = `${minBlkDistKm.toFixed(1)} km (Clear Buffer)`;
         blockEl.style.color = "var(--color-green)";
       }
     }
@@ -1275,11 +1092,7 @@ class CorridorTrackingEngine {
     if (signalEl) {
       const isGreen = train.signal === "Double Green";
       const isYellow = train.signal.includes("Yellow");
-      signalEl.style.color = isGreen
-        ? "var(--color-green)"
-        : isYellow
-        ? "var(--color-amber)"
-        : "var(--color-red)";
+      signalEl.style.color = isGreen ? "var(--color-green)" : isYellow ? "var(--color-amber)" : "var(--color-red)";
       signalEl.innerHTML = `
         <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor;"></span>
         ${train.signal}
@@ -1288,10 +1101,9 @@ class CorridorTrackingEngine {
 
     if (formulaEl) {
       formulaEl.innerHTML = `
-        <strong>spherical.computeDistanceBetween:</strong> Separated by <strong>${(
-          minBlkDist / 1000
-        ).toFixed(2)} km</strong> from block zone ${nearestBlk ? nearestBlk.reqId : "N/A"}.
-        Heading computed at <strong>${heading}°</strong>.
+        <strong>turf.distance &amp; turf.along:</strong> Separated by <strong>${minBlkDistKm.toFixed(
+          2
+        )} km</strong> from block zone ${nearestBlk ? nearestBlk.reqId : "N/A"}. Track orientation: <strong>${heading}°</strong>.
       `;
     }
   }
@@ -1307,9 +1119,7 @@ class CorridorTrackingEngine {
     listContainer.innerHTML = "";
     visibleTrains.forEach((t) => {
       const row = document.createElement("div");
-      row.className = `corridor-train-row ${
-        t.id === this.selectedTrainId ? "active" : ""
-      }`;
+      row.className = `corridor-train-row ${t.id === this.selectedTrainId ? "active" : ""}`;
       row.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px;">
           <div style="width: 26px; height: 26px; border-radius: 6px; background: var(--color-sidebar-hover); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--color-railway-blue);">
@@ -1321,9 +1131,7 @@ class CorridorTrackingEngine {
           </div>
         </div>
         <div style="text-align: right;">
-          <div style="font-size: 12.5px; font-weight: 700; color: var(--color-navy);">${Math.round(
-            t.speed
-          )} km/h</div>
+          <div style="font-size: 12.5px; font-weight: 700; color: var(--color-navy);">${Math.round(t.speed)} km/h</div>
           <span style="font-size: 10px; color: ${
             t.signal.includes("Green")
               ? "var(--color-green)"
@@ -1343,18 +1151,21 @@ class CorridorTrackingEngine {
   }
 
   updateGeometryMetrics() {
-    // 1. Total Corridor Track KM
-    let totalMeters = 0;
+    // 1. Total Corridor Track KM using Turf
+    let totalKm = 0;
     if (this.selectedCorridor === "ALL") {
       Object.values(CORRIDORS_DATA).forEach((c) => {
-        totalMeters += this.computeLength(c.path);
+        const line = TurfEngine.lineString(c.path.map((p) => [p.lng, p.lat]));
+        totalKm += TurfEngine.length(line, { units: "kilometers" });
       });
     } else if (CORRIDORS_DATA[this.selectedCorridor]) {
-      totalMeters = this.computeLength(CORRIDORS_DATA[this.selectedCorridor].path);
+      const c = CORRIDORS_DATA[this.selectedCorridor];
+      const line = TurfEngine.lineString(c.path.map((p) => [p.lng, p.lat]));
+      totalKm = TurfEngine.length(line, { units: "kilometers" });
     }
     const trackKmEl = document.getElementById("val-corridor-track-km");
     if (trackKmEl) {
-      trackKmEl.textContent = `${(totalMeters / 1000).toFixed(1)} km`;
+      trackKmEl.textContent = `${totalKm.toFixed(1)} km`;
     }
 
     // 2. Active Trains
@@ -1370,34 +1181,34 @@ class CorridorTrackingEngine {
         : ACTIVE_BLOCK_ZONES.filter((b) => b.corridorId === this.selectedCorridor).length;
     const blocksCountEl = document.getElementById("val-corridor-active-blocks");
     if (blocksCountEl) {
-      blocksCountEl.textContent = `${activeBlocksCount} Section${
-        activeBlocksCount === 1 ? "" : "s"
-      }`;
+      blocksCountEl.textContent = `${activeBlocksCount} Section${activeBlocksCount === 1 ? "" : "s"}`;
     }
 
-    // 4. Minimum distance to block across all active trains
-    let globalMinDistance = Infinity;
+    // 4. Global minimum proximity to maintenance blocks using Turf
+    let globalMinDistanceKm = Infinity;
     const visibleTrains = this.getFilteredTrains();
     visibleTrains.forEach((train) => {
-      const trainPos = this.getTrainPosition(train);
+      const pos = this.getTrainPosition(train);
+      const trainPt = TurfEngine.point([pos.lng, pos.lat]);
       ACTIVE_BLOCK_ZONES.forEach((blk) => {
         if (blk.corridorId === train.corridorId) {
-          const d = this.computeDistanceBetween(trainPos, blk.center);
-          if (d < globalMinDistance) globalMinDistance = d;
+          const d = TurfEngine.distance(trainPt, TurfEngine.point([blk.center.lng, blk.center.lat]), {
+            units: "kilometers"
+          });
+          if (d < globalMinDistanceKm) globalMinDistanceKm = d;
         }
       });
     });
 
     const proximityEl = document.getElementById("val-corridor-nearest-proximity");
     const proximityStatusEl = document.getElementById("val-corridor-proximity-status");
-    if (proximityEl && globalMinDistance !== Infinity) {
-      const km = (globalMinDistance / 1000).toFixed(1);
-      proximityEl.textContent = `${km} km`;
+    if (proximityEl && globalMinDistanceKm !== Infinity) {
+      proximityEl.textContent = `${globalMinDistanceKm.toFixed(1)} km`;
       if (proximityStatusEl) {
-        if (globalMinDistance < 3000) {
+        if (globalMinDistanceKm < 3.0) {
           proximityStatusEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Worksite Caution Zone`;
           proximityStatusEl.style.color = "var(--color-red)";
-        } else if (globalMinDistance < 8000) {
+        } else if (globalMinDistanceKm < 8.0) {
           proximityStatusEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Approaching Worksite`;
           proximityStatusEl.style.color = "var(--color-amber)";
         } else {
@@ -1432,9 +1243,7 @@ class CorridorTrackingEngine {
     if (chkBlocks) {
       chkBlocks.addEventListener("change", (e) => {
         this.showBlocks = e.target.checked;
-        if (this.isNativeMaps) {
-          this.renderGoogleMapsBlocks(this.googleMaps.marker.AdvancedMarkerElement);
-        }
+        this.renderBlocks();
       });
     }
 
@@ -1442,9 +1251,7 @@ class CorridorTrackingEngine {
     if (chkStations) {
       chkStations.addEventListener("change", (e) => {
         this.showStations = e.target.checked;
-        if (this.isNativeMaps) {
-          this.renderGoogleMapsStations(this.googleMaps.marker.AdvancedMarkerElement);
-        }
+        this.renderStations();
       });
     }
 
@@ -1485,61 +1292,125 @@ class CorridorTrackingEngine {
     const btnRecenter = document.getElementById("btn-recenter-map");
     if (btnRecenter) {
       btnRecenter.addEventListener("click", () => {
-        const center =
-          this.selectedCorridor !== "ALL" && CORRIDORS_DATA[this.selectedCorridor]
-            ? CORRIDORS_DATA[this.selectedCorridor].center
-            : { lat: 19.2437, lng: 73.1355 };
-        const zoom =
-          this.selectedCorridor !== "ALL" && CORRIDORS_DATA[this.selectedCorridor]
-            ? CORRIDORS_DATA[this.selectedCorridor].zoom
-            : 10;
+        this.resetMapView();
+      });
+    }
 
-        if (this.isNativeMaps && this.map) {
-          this.map.panTo(center);
-          this.map.setZoom(zoom);
-        } else {
-          this.canvasCenter = { ...center };
-          this.canvasZoom = zoom;
-          this.updateCenterCoordinateText();
+    // Fullscreen Toggle
+    const btnFullscreen = document.getElementById("btn-toggle-fullscreen");
+    const mapWrapper = document.getElementById("corridor-map-wrapper");
+    if (btnFullscreen && mapWrapper) {
+      btnFullscreen.addEventListener("click", () => {
+        mapWrapper.classList.toggle("fullscreen-mode");
+        const isFull = mapWrapper.classList.contains("fullscreen-mode");
+        btnFullscreen.innerHTML = isFull
+          ? '<i class="fa-solid fa-compress"></i> Exit'
+          : '<i class="fa-solid fa-expand"></i> Fullscreen';
+
+        setTimeout(() => {
+          if (this.map) this.map.invalidateSize();
+        }, 100);
+      });
+    }
+
+    // Map Settings Modal
+    const modalSettings = document.getElementById("modal-map-settings");
+    const btnOpenSettings = document.getElementById("btn-map-layer-settings");
+    const statusBadge = document.getElementById("map-api-status-badge");
+    const selectBasemap = document.getElementById("select-basemap-layer");
+    const modalToggleBlocks = document.getElementById("modal-toggle-blocks");
+    const modalToggleStations = document.getElementById("modal-toggle-stations");
+    const modalToggleTrains = document.getElementById("modal-toggle-trains");
+    const btnResetView = document.getElementById("btn-reset-map-view");
+
+    const openSettingsModal = () => {
+      if (!modalSettings) return;
+      if (modalToggleBlocks) modalToggleBlocks.checked = this.showBlocks;
+      if (modalToggleStations) modalToggleStations.checked = this.showStations;
+      if (modalToggleTrains) modalToggleTrains.checked = this.showTrains;
+      modalSettings.style.display = "flex";
+    };
+
+    if (btnOpenSettings) btnOpenSettings.addEventListener("click", openSettingsModal);
+    if (statusBadge) statusBadge.addEventListener("click", openSettingsModal);
+
+    if (selectBasemap) {
+      selectBasemap.addEventListener("change", (e) => {
+        this.setBasemap(e.target.value);
+        if (window.showToast) {
+          window.showToast(`Switched basemap to ${e.target.options[e.target.selectedIndex].text}`, "info", 2500);
         }
       });
+    }
+
+    if (modalToggleBlocks) {
+      modalToggleBlocks.addEventListener("change", (e) => {
+        this.showBlocks = e.target.checked;
+        const mainChk = document.getElementById("chk-show-blocks");
+        if (mainChk) mainChk.checked = this.showBlocks;
+        this.renderBlocks();
+      });
+    }
+
+    if (modalToggleStations) {
+      modalToggleStations.addEventListener("change", (e) => {
+        this.showStations = e.target.checked;
+        const mainChk = document.getElementById("chk-show-stations");
+        if (mainChk) mainChk.checked = this.showStations;
+        this.renderStations();
+      });
+    }
+
+    if (modalToggleTrains) {
+      modalToggleTrains.addEventListener("change", (e) => {
+        this.showTrains = e.target.checked;
+        this.renderTrainMarkers();
+      });
+    }
+
+    if (btnResetView) {
+      btnResetView.addEventListener("click", () => {
+        this.resetMapView();
+        if (modalSettings) modalSettings.style.display = "none";
+      });
+    }
+  }
+
+  resetMapView() {
+    if (!this.map) return;
+    if (this.selectedCorridor !== "ALL" && CORRIDORS_DATA[this.selectedCorridor]) {
+      const c = CORRIDORS_DATA[this.selectedCorridor];
+      this.map.setView([c.center.lat, c.center.lng], c.zoom, { animate: true });
+    } else {
+      const allPoints = [];
+      Object.values(CORRIDORS_DATA).forEach((c) => {
+        c.path.forEach((pt) => allPoints.push([pt.lat, pt.lng]));
+      });
+      if (allPoints.length > 0) {
+        this.map.fitBounds(allPoints, { padding: [40, 40], animate: true });
+      } else {
+        this.map.setView([19.2437, 73.1355], 10, { animate: true });
+      }
     }
   }
 
   onFilterChange() {
     this.updateGeometryMetrics();
     this.renderFleetList();
-
-    const targetCorridor = CORRIDORS_DATA[this.selectedCorridor];
-    const center = targetCorridor
-      ? targetCorridor.center
-      : { lat: 19.2437, lng: 73.1355 };
-    const zoom = targetCorridor ? targetCorridor.zoom : 10;
-
-    if (this.isNativeMaps && this.map) {
-      this.map.panTo(center);
-      this.map.setZoom(zoom);
-      this.renderGoogleMapsPolylines();
-      this.renderGoogleMapsStations(this.googleMaps.marker.AdvancedMarkerElement);
-      this.renderGoogleMapsBlocks(this.googleMaps.marker.AdvancedMarkerElement);
-      this.renderGoogleMapsTrainMarkers(this.googleMaps.marker.AdvancedMarkerElement);
-    } else {
-      this.canvasCenter = { ...center };
-      this.canvasZoom = zoom;
-      this.updateCenterCoordinateText();
-    }
+    this.renderPolylines();
+    this.renderStations();
+    this.renderBlocks();
+    this.renderTrainMarkers();
+    this.resetMapView();
   }
 
   // Triggered when tab becomes active
   onPageActivated() {
-    if (this.isNativeMaps && this.map && this.googleMaps) {
-      this.googleMaps.event.trigger(this.map, "resize");
-    } else if (this.canvas) {
-      const rect = this.canvas.parentElement.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      this.canvas.width = rect.width * dpr;
-      this.canvas.height = rect.height * dpr;
-      this.ctx.scale(dpr, dpr);
+    if (this.map) {
+      setTimeout(() => {
+        this.map.invalidateSize();
+        this.updateCenterCoordinateText();
+      }, 60);
     }
   }
 }
